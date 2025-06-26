@@ -46,8 +46,6 @@ def analyze_pdfs_with_gemini(input_folder, api_key):
 
     print(response.text)
 
-    print(f"Gemini analysis saved to: {output_file}")
-    print("Preview:", response.text[:200], "...")
 
 if __name__ == "__main__":
     folder = input("Enter folder path to scan for PDFs: ").strip()
