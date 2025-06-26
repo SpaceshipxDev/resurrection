@@ -90,6 +90,7 @@ def upload_pptx_as_pdf(input_folder, client):
             )
             uploaded_files.append( (os.path.basename(pptx_path), uploaded) )
             print(f"PPTX converted & uploaded as PDF: {os.path.basename(pptx_path)}")
+            os.unlink(pdf_path)
 
             # Optional: Clean up PDF after upload
             # os.unlink(pdf_path)
