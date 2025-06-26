@@ -1,10 +1,25 @@
 import os
 from google import genai
 
+
+def build_directory_map(input_folder):
+    """
+    Builds a tree map of all files under input_folder as a string.
+    """
+    lines = []
+    for root, _, files in os.walk(input_folder):
+        rel_root = os.path.relpath(root, input_folder)
+        if rel_root == '.':
+            rel_root = os.path.basename(input_folder)
+        lines.append(f"{rel_root}/")
+        for file in files:
+            lines.append(f"    {file}")
+    return "\n".join(lines)
+
+
 def analyze_pdfs_with_gemini(input_folder, api_key):
     """
     Scans the input_folder for PDF files and analyzes them with Gemini.
-    Saves results to gemini_pdf_analysis.txt in the input folder.
     """
     pdf_files = []
     # Find all PDFs
@@ -37,6 +52,9 @@ def analyze_pdfs_with_gemini(input_folder, api_key):
         return
 
     print("Processing PDFs with Gemini...")
+
+    directory_map = build_directory_map(input_folder)
+
 
     contents = uploaded_files + ["Extract the fullmanufacturing requirements for EACH component"]
     response = client.models.generate_content(
