@@ -55,8 +55,13 @@ def analyze_pdfs_with_gemini(input_folder, api_key):
 
     directory_map = build_directory_map(input_folder)
 
+    prompt = (
+        f"Directory Map of all files and folders in this batch:\n"
+        f"{directory_map}\n\n"
+        f"Now, extract the full manufacturing requirements for EACH component."
+    )
 
-    contents = uploaded_files + ["Extract the fullmanufacturing requirements for EACH component"]
+    contents = uploaded_files + prompt
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=contents,
@@ -66,7 +71,7 @@ def analyze_pdfs_with_gemini(input_folder, api_key):
 
 
 if __name__ == "__main__":
-    folder = input("Enter folder path to scan for PDFs: ").strip()
+    folder = input("Enter folder path to scan: ").strip()
     if not os.path.isdir(folder):
         print("Invalid directory.")
     elif "GOOGLE_API_KEY" not in os.environ:
