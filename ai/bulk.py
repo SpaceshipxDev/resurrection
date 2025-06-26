@@ -1,4 +1,6 @@
 import os
+import tempfile
+import pandas as pd
 from google import genai
 
 def build_directory_map(input_folder):
@@ -12,32 +14,58 @@ def build_directory_map(input_folder):
             lines.append(f"    {file}")
     return "\n".join(lines)
 
-
-def upload_pdfs(input_folder, api_key):
-    pdf_files = []
+def upload_csvs(input_folder, api_key):
+    csv_files = []
     for root, _, files in os.walk(input_folder):
         for file in files:
-            if file.lower().endswith('.pdf'):
-                pdf_files.append(os.path.join(root, file))
-
-    if not pdf_files:
-        print("No PDF files found.")
+            if file.lower().endswith('.csv'):
+                csv_files.append(os.path.join(root, file))
+    if not csv_files:
+        print("No CSV files found.")
         return []
-
     client = genai.Client(api_key=api_key)
     uploaded_files = []
-    for pdf_path in pdf_files:
+    for csv_path in csv_files:
         try:
-            uploaded_file = client.files.upload(
-                file=pdf_path,
-                config=dict(mime_type='application/pdf')
+            uploaded = client.files.upload(
+                file=csv_path,
+                config=dict(mime_type='text/csv')
             )
-            uploaded_files.append(uploaded_file)
-            print(f"Uploaded: {os.path.basename(pdf_path)}")
+            uploaded_files.append(uploaded)
+            print(f"Uploaded: {os.path.basename(csv_path)}")
         except Exception as e:
-            print(f"Failed to upload {os.path.basename(pdf_path)}: {e}")
+            print(f"Failed to upload {os.path.basename(csv_path)}: {e}")
     return uploaded_files
 
+def upload_excels_as_csv(input_folder, api_key):
+    excel_exts = ('.xls', '.xlsx')
+    excel_files = []
+    for root, _, files in os.walk(input_folder):
+        for file in files:
+            if file.lower().endswith(excel_exts):
+                excel_files.append(os.path.join(root, file))
+    if not excel_files:
+        print("No Excel files found.")
+        return []
+    client = genai.Client(api_key=api_key)
+    uploaded_files = []
+    for excel_path in excel_files:
+        try:
+            # Convert to CSV first (use first sheet)
+            df = pd.read_excel(excel_path)
+            with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+                csv_path = tmp.name
+                df.to_csv(csv_path, index=False)
+            uploaded = client.files.upload(
+                file=csv_path,
+                config=dict(mime_type='text/csv')
+            )
+            uploaded_files.append(uploaded)
+            print(f"Excel converted & uploaded as CSV: {os.path.basename(excel_path)}")
+            os.unlink(csv_path)
+        except Exception as e:
+            print(f"Failed to process {os.path.basename(excel_path)}: {e}")
+    return uploaded_files
 
 def analyze_uploaded_files(uploaded_files, input_folder, api_key):
     if not uploaded_files:
@@ -58,7 +86,6 @@ def analyze_uploaded_files(uploaded_files, input_folder, api_key):
     )
     print(response.text)
 
-
 if __name__ == "__main__":
     folder = input("Enter folder path to scan: ").strip()
     if not os.path.isdir(folder):
@@ -67,7 +94,9 @@ if __name__ == "__main__":
         print("Set GOOGLE_API_KEY in your environment variables.")
     else:
         api_key = os.environ["GOOGLE_API_KEY"]
-        # Phase 1: Upload PDFs
-        uploaded = upload_pdfs(folder, api_key)
-        # Phase 2: Analyze (if you want to call this now; in future you could save and load uploaded handles)
-        analyze_uploaded_files(uploaded, folder, api_key)
+        # Upload CSVs
+        uploaded_csvs = upload_csvs(folder, api_key)
+        # Upload Excels (as CSV)
+        uploaded_excels = upload_excels_as_csv(folder, api_key)
+        all_uploaded = uploaded_csvs + uploaded_excels
+        analyze_uploaded_files(all_uploaded, folder, api_key)
