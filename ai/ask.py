@@ -1,6 +1,6 @@
 from google.genai import types
 
-with open('path/to/small-sample.jpg', 'rb') as f:
+with open('ai/Screenshot 2025-06-26 at 3.24.12 PM.png', 'rb') as f:
     image_bytes = f.read()
 
 response = client.models.generate_content(
