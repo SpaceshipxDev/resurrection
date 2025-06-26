@@ -75,7 +75,7 @@ def build_gemini_contents(labeled_files, directory_map, instructions):
         parts.extend([
             f"--- FILE: {label} ---",
             file_obj,
-            f"--- END FILE ---\n"
+            "\n"
         ])
     # Add your prompt/instructions at the end
     parts.append(instructions)
