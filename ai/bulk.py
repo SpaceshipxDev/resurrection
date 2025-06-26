@@ -1,11 +1,7 @@
 import os
 from google import genai
 
-
 def build_directory_map(input_folder):
-    """
-    Builds a tree map of all files under input_folder as a string.
-    """
     lines = []
     for root, _, files in os.walk(input_folder):
         rel_root = os.path.relpath(root, input_folder)
@@ -17,12 +13,8 @@ def build_directory_map(input_folder):
     return "\n".join(lines)
 
 
-def analyze_pdfs_with_gemini(input_folder, api_key):
-    """
-    Scans the input_folder for PDF files and analyzes them with Gemini.
-    """
+def upload_pdfs(input_folder, api_key):
     pdf_files = []
-    # Find all PDFs
     for root, _, files in os.walk(input_folder):
         for file in files:
             if file.lower().endswith('.pdf'):
@@ -30,12 +22,10 @@ def analyze_pdfs_with_gemini(input_folder, api_key):
 
     if not pdf_files:
         print("No PDF files found.")
-        return
+        return []
 
     client = genai.Client(api_key=api_key)
     uploaded_files = []
-    print(f"Uploading {len(pdf_files)} PDF files to Gemini...")
-
     for pdf_path in pdf_files:
         try:
             uploaded_file = client.files.upload(
@@ -46,27 +36,26 @@ def analyze_pdfs_with_gemini(input_folder, api_key):
             print(f"Uploaded: {os.path.basename(pdf_path)}")
         except Exception as e:
             print(f"Failed to upload {os.path.basename(pdf_path)}: {e}")
+    return uploaded_files
 
+
+def analyze_uploaded_files(uploaded_files, input_folder, api_key):
     if not uploaded_files:
-        print("No files were successfully uploaded.")
+        print("No files to analyze.")
         return
 
-    print("Processing PDFs with Gemini...")
-
+    client = genai.Client(api_key=api_key)
     directory_map = build_directory_map(input_folder)
-
     prompt = (
         f"Directory Map of all files and folders in this batch:\n"
         f"{directory_map}\n\n"
         f"Now, extract the full manufacturing requirements for EACH component."
     )
-
     contents = uploaded_files + [prompt]
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=contents,
     )
-
     print(response.text)
 
 
@@ -77,4 +66,8 @@ if __name__ == "__main__":
     elif "GOOGLE_API_KEY" not in os.environ:
         print("Set GOOGLE_API_KEY in your environment variables.")
     else:
-        analyze_pdfs_with_gemini(folder, os.environ["GOOGLE_API_KEY"])
+        api_key = os.environ["GOOGLE_API_KEY"]
+        # Phase 1: Upload PDFs
+        uploaded = upload_pdfs(folder, api_key)
+        # Phase 2: Analyze (if you want to call this now; in future you could save and load uploaded handles)
+        analyze_uploaded_files(uploaded, folder, api_key)
