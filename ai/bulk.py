@@ -8,7 +8,7 @@ my_file = client.files.upload(file="ai/Screenshot 2025-06-26 at 3.24.12 PM.png
 
 response = client.models.generate_content(
     model="gemini-2.5-flash",
-    contents=[my_file, "Caption this image."],
+    contents=[my_file, "what is the file name of ht eimage i uploaded"],
 )
 
 print(response.text)
