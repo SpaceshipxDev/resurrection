@@ -38,7 +38,7 @@ def analyze_pdfs_with_gemini(input_folder, api_key):
 
     print("Processing PDFs with Gemini...")
 
-    contents = uploaded_files + ["Extract the key requirements or insights from these PDFs."]
+    contents = uploaded_files + ["Extract the full requirements for the manufacturing of each component"]
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=contents,
