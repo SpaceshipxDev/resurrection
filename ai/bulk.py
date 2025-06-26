@@ -68,6 +68,7 @@ def upload_excels_as_csv(input_folder, api_key):
             print(f"Failed to process Excel {os.path.basename(excel_path)}: {e}")
     return uploaded_files
 
+
 def analyze_uploaded_files(uploaded_files, input_folder, api_key):
     if not uploaded_files:
         print("No files to analyze.")
@@ -86,6 +87,7 @@ def analyze_uploaded_files(uploaded_files, input_folder, api_key):
         contents=contents,
     )
     print(response.text)
+
 
 if __name__ == "__main__":
     folder = input("Enter folder path to scan: ").strip()
