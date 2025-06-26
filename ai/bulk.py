@@ -14,7 +14,7 @@ sample_pdf_1 = client.files.upload(
 
 response = client.models.generate_content(
     model="gemini-2.5-flash",
-    contents=[my_file, mon_fil_2, sample_pdf_1, "how many files did i upload "],
+    contents=[my_file, mon_fil_2, sample_pdf_1, "extract the full requirements of each component"],
 )
 
 print(response.text)
