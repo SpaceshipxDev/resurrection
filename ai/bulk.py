@@ -34,6 +34,7 @@ def upload_pdfs(input_folder, client):
             print(f"Failed to upload PDF {os.path.basename(pdf_path)}: {e}")
     return uploaded_files
 
+
 def upload_excels_as_csv(input_folder, client):
     excel_exts = ('.xls', '.xlsx')
     excel_files = []
@@ -58,6 +59,45 @@ def upload_excels_as_csv(input_folder, client):
         except Exception as e:
             print(f"Failed to process Excel {os.path.basename(excel_path)}: {e}")
     return uploaded_files
+
+
+def upload_pptx_as_pdf(input_folder, client):
+    pptx_files = []
+    for root, _, files in os.walk(input_folder):
+        for file in files:
+            if file.lower().endswith('.pptx'):
+                pptx_files.append(os.path.join(root, file))
+    uploaded_files = []
+    for pptx_path in pptx_files:
+        try:
+            # Convert PPTX to PDF using LibreOffice
+            output_dir = os.path.dirname(pptx_path)
+            base_name = os.path.splitext(os.path.basename(pptx_path))[0]
+            pdf_path = os.path.join(output_dir, base_name + '.pdf')
+
+            # Only convert if PDF does not already exist, or always reconvert:
+            cmd = [
+                "libreoffice", "--headless", "--convert-to", "pdf", "--outdir", output_dir, pptx_path
+            ]
+            result = os.system(' '.join(f'"{c}"' if ' ' in c else c for c in cmd))
+            if result != 0 or not os.path.isfile(pdf_path):
+                raise RuntimeError(f"LibreOffice failed for {pptx_path}")
+
+            # Upload the PDF
+            uploaded = client.files.upload(
+                file=pdf_path,
+                config=dict(mime_type='application/pdf')
+            )
+            uploaded_files.append( (os.path.basename(pptx_path), uploaded) )
+            print(f"PPTX converted & uploaded as PDF: {os.path.basename(pptx_path)}")
+
+            # Optional: Clean up PDF after upload
+            # os.unlink(pdf_path)
+
+        except Exception as e:
+            print(f"Failed to process PPTX {os.path.basename(pptx_path)}: {e}")
+    return uploaded_files
+
 
 def build_gemini_contents(labeled_files, directory_map, instructions):
     """
@@ -112,5 +152,7 @@ if __name__ == "__main__":
         client = genai.Client(api_key=api_key)
         uploaded_pdfs   = upload_pdfs(folder, client)
         uploaded_excels = upload_excels_as_csv(folder, client)
-        all_uploaded    = uploaded_pdfs + uploaded_excels
+        uploaded_pptx   = upload_pptx_as_pdf(folder, client)
+
+        all_uploaded    = uploaded_pdfs + uploaded_excels + uploaded_pptx
         analyze_uploaded_files(all_uploaded, folder, client)
