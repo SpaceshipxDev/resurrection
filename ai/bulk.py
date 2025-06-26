@@ -99,6 +99,7 @@ def upload_pptx_as_pdf(input_folder, client):
     return uploaded_files
 
 
+
 def build_gemini_contents(labeled_files, directory_map, instructions):
     """
     labeled_files: list of (label, file_obj)
