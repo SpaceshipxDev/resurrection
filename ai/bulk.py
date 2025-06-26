@@ -38,15 +38,13 @@ def analyze_pdfs_with_gemini(input_folder, api_key):
 
     print("Processing PDFs with Gemini...")
 
-    contents = uploaded_files + ["Extract the full requirements for the manufacturing of each component"]
+    contents = uploaded_files + ["Extract the fullmanufacturing requirements for EACH component"]
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=contents,
     )
 
-    output_file = os.path.join(input_folder, "gemini_pdf_analysis.txt")
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(response.text)
+    print(response.text)
 
     print(f"Gemini analysis saved to: {output_file}")
     print("Preview:", response.text[:200], "...")
