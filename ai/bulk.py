@@ -14,6 +14,29 @@ def build_directory_map(input_folder):
             lines.append(f"    {file}")
     return "\n".join(lines)
 
+def upload_pdfs(input_folder, api_key):
+    pdf_files = []
+    for root, _, files in os.walk(input_folder):
+        for file in files:
+            if file.lower().endswith('.pdf'):
+                pdf_files.append(os.path.join(root, file))
+    if not pdf_files:
+        print("No PDF files found.")
+        return []
+    client = genai.Client(api_key=api_key)
+    uploaded_files = []
+    for pdf_path in pdf_files:
+        try:
+            uploaded = client.files.upload(
+                file=pdf_path,
+                config=dict(mime_type='application/pdf')
+            )
+            uploaded_files.append(uploaded)
+            print(f"Uploaded PDF: {os.path.basename(pdf_path)}")
+        except Exception as e:
+            print(f"Failed to upload PDF {os.path.basename(pdf_path)}: {e}")
+    return uploaded_files
+
 def upload_csvs(input_folder, api_key):
     csv_files = []
     for root, _, files in os.walk(input_folder):
@@ -32,9 +55,9 @@ def upload_csvs(input_folder, api_key):
                 config=dict(mime_type='text/csv')
             )
             uploaded_files.append(uploaded)
-            print(f"Uploaded: {os.path.basename(csv_path)}")
+            print(f"Uploaded CSV: {os.path.basename(csv_path)}")
         except Exception as e:
-            print(f"Failed to upload {os.path.basename(csv_path)}: {e}")
+            print(f"Failed to upload CSV {os.path.basename(csv_path)}: {e}")
     return uploaded_files
 
 def upload_excels_as_csv(input_folder, api_key):
@@ -51,7 +74,6 @@ def upload_excels_as_csv(input_folder, api_key):
     uploaded_files = []
     for excel_path in excel_files:
         try:
-            # Convert to CSV first (use first sheet)
             df = pd.read_excel(excel_path)
             with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
                 csv_path = tmp.name
@@ -64,7 +86,7 @@ def upload_excels_as_csv(input_folder, api_key):
             print(f"Excel converted & uploaded as CSV: {os.path.basename(excel_path)}")
             os.unlink(csv_path)
         except Exception as e:
-            print(f"Failed to process {os.path.basename(excel_path)}: {e}")
+            print(f"Failed to process Excel {os.path.basename(excel_path)}: {e}")
     return uploaded_files
 
 def analyze_uploaded_files(uploaded_files, input_folder, api_key):
@@ -94,9 +116,8 @@ if __name__ == "__main__":
         print("Set GOOGLE_API_KEY in your environment variables.")
     else:
         api_key = os.environ["GOOGLE_API_KEY"]
-        # Upload CSVs
+        uploaded_pdfs = upload_pdfs(folder, api_key)
         uploaded_csvs = upload_csvs(folder, api_key)
-        # Upload Excels (as CSV)
         uploaded_excels = upload_excels_as_csv(folder, api_key)
-        all_uploaded = uploaded_csvs + uploaded_excels
+        all_uploaded = uploaded_pdfs + uploaded_csvs + uploaded_excels
         analyze_uploaded_files(all_uploaded, folder, api_key)
