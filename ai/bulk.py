@@ -92,7 +92,8 @@ def analyze_uploaded_files(labeled_files, input_folder, client):
         "Always refer to each file using the exact filename label above."
     )
     contents = build_gemini_contents(labeled_files, directory_map, instructions)
-    print("\n\n" + "\n".join(contents))
+    printable = [x for x in contents if isinstance(x, str)]
+    print("\n\n" + "\n".join(printable))
 
     response = client.models.generate_content(
         model="gemini-2.5-flash",
