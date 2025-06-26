@@ -131,8 +131,9 @@ def analyze_uploaded_files(labeled_files, input_folder, client):
 
     directory_map = build_directory_map(input_folder)
     instructions = (
-        "Now, extract the full manufacturing requirements for EACH component. Including the quantity. "
-        "Always refer to each file using the exact filename label above."
+        "Now, carefully extract the full manufacturing requirements for EACH component. Including the quantity. "
+        "Always refer to each file using the exact filename label above." 
+        "Also, ensure to tell me what each component looks like, if provided."
     )
     contents = build_gemini_contents(labeled_files, directory_map, instructions)
     printable = [x for x in contents if isinstance(x, str)]
