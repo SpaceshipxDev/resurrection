@@ -61,7 +61,7 @@ def analyze_pdfs_with_gemini(input_folder, api_key):
         f"Now, extract the full manufacturing requirements for EACH component."
     )
 
-    contents = uploaded_files + prompt
+    contents = uploaded_files + [prompt]
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=contents,
