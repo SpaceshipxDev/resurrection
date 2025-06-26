@@ -16,7 +16,7 @@ contents=[
     data=image_bytes,
     mime_type='image/jpeg',
     ),
-    'Caption this image.'
+    'what is the name of this image '
 ]
 )
 
