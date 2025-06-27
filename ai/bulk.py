@@ -10,6 +10,7 @@ def scan_files(input_folder):
         for file in files:
             abs_path = os.path.join(root, file)
             rel_path = os.path.relpath(abs_path, input_folder)
+            # extension: .pdf, .stp, etc
             ext = os.path.splitext(file)[-1].lower()
             file_list.append((rel_path, abs_path, ext))
     return file_list
