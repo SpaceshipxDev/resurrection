@@ -3,142 +3,94 @@ import tempfile
 import pandas as pd
 from google import genai
 
-def build_directory_map(input_folder):
-    lines = []
+def scan_files(input_folder):
+    """Return a list of (relative_path, abs_path, ext) for all files under input_folder"""
+    file_list = []
     for root, _, files in os.walk(input_folder):
-        rel_root = os.path.relpath(root, input_folder)
-        if rel_root == '.':
-            rel_root = os.path.basename(input_folder)
-        lines.append(f"{rel_root}/")
         for file in files:
-            lines.append(f"    {file}")
-    return "\n".join(lines)
+            abs_path = os.path.join(root, file)
+            rel_path = os.path.relpath(abs_path, input_folder)
+            ext = os.path.splitext(file)[-1].lower()
+            file_list.append((rel_path, abs_path, ext))
+    return file_list
 
-def upload_pdfs(input_folder, client):
-    pdf_files = []
-    for root, _, files in os.walk(input_folder):
-        for file in files:
-            if file.lower().endswith('.pdf'):
-                pdf_files.append(os.path.join(root, file))
-    uploaded_files = []
-    for pdf_path in pdf_files:
+def upload_files(file_list, client):
+    """Uploads PDFs, Excels (as CSV), PPTX (as PDF). Returns dict: rel_path -> file_obj or None."""
+    uploaded = {}
+    for rel_path, abs_path, ext in file_list:
         try:
-            uploaded = client.files.upload(
-                file=pdf_path,
-                config=dict(mime_type='application/pdf')
-            )
-            # Store tuple: (file label, uploaded file object)
-            uploaded_files.append( (os.path.basename(pdf_path), uploaded) )
-            print(f"Uploaded PDF: {os.path.basename(pdf_path)}")
+            if ext == '.pdf':
+                obj = client.files.upload(file=abs_path, config=dict(mime_type='application/pdf'))
+                uploaded[rel_path] = obj
+                print(f"Uploaded PDF: {rel_path}")
+            elif ext in ('.xls', '.xlsx'):
+                df = pd.read_excel(abs_path)
+                with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+                    csv_path = tmp.name
+                    df.to_csv(csv_path, index=False)
+                obj = client.files.upload(file=csv_path, config=dict(mime_type='text/csv'))
+                uploaded[rel_path] = obj
+                print(f"Excel converted & uploaded as CSV: {rel_path}")
+                os.unlink(csv_path)
+            elif ext == '.pptx':
+                output_dir = os.path.dirname(abs_path)
+                base_name = os.path.splitext(os.path.basename(abs_path))[0]
+                pdf_path = os.path.join(output_dir, base_name + '.pdf')
+                cmd = [
+                    "libreoffice", "--headless", "--convert-to", "pdf", "--outdir", output_dir, abs_path
+                ]
+                result = os.system(' '.join(f'"{c}"' if ' ' in c else c for c in cmd))
+                if result != 0 or not os.path.isfile(pdf_path):
+                    raise RuntimeError(f"LibreOffice failed for {rel_path}")
+                obj = client.files.upload(file=pdf_path, config=dict(mime_type='application/pdf'))
+                uploaded[rel_path] = obj
+                print(f"PPTX converted & uploaded as PDF: {rel_path}")
+                os.unlink(pdf_path)
+            else:
+                uploaded[rel_path] = None  # Not uploaded, e.g., .stp
         except Exception as e:
-            print(f"Failed to upload PDF {os.path.basename(pdf_path)}: {e}")
-    return uploaded_files
+            print(f"Failed to process {rel_path}: {e}")
+            uploaded[rel_path] = None
+    return uploaded
 
 
-def upload_excels_as_csv(input_folder, client):
-    excel_exts = ('.xls', '.xlsx')
-    excel_files = []
-    for root, _, files in os.walk(input_folder):
-        for file in files:
-            if file.lower().endswith(excel_exts):
-                excel_files.append(os.path.join(root, file))
-    uploaded_files = []
-    for excel_path in excel_files:
-        try:
-            df = pd.read_excel(excel_path)
-            with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
-                csv_path = tmp.name
-                df.to_csv(csv_path, index=False)
-            uploaded = client.files.upload(
-                file=csv_path,
-                config=dict(mime_type='text/csv')
-            )
-            uploaded_files.append( (os.path.basename(excel_path), uploaded) )
-            print(f"Excel converted & uploaded as CSV: {os.path.basename(excel_path)}")
-            os.unlink(csv_path)
-        except Exception as e:
-            print(f"Failed to process Excel {os.path.basename(excel_path)}: {e}")
-    return uploaded_files
-
-
-def upload_pptx_as_pdf(input_folder, client):
-    pptx_files = []
-    for root, _, files in os.walk(input_folder):
-        for file in files:
-            if file.lower().endswith('.pptx'):
-                pptx_files.append(os.path.join(root, file))
-    uploaded_files = []
-    for pptx_path in pptx_files:
-        try:
-            # Convert PPTX to PDF using LibreOffice
-            output_dir = os.path.dirname(pptx_path)
-            base_name = os.path.splitext(os.path.basename(pptx_path))[0]
-            pdf_path = os.path.join(output_dir, base_name + '.pdf')
-
-            # Only convert if PDF does not already exist, or always reconvert:
-            cmd = [
-                "libreoffice", "--headless", "--convert-to", "pdf", "--outdir", output_dir, pptx_path
-            ]
-            result = os.system(' '.join(f'"{c}"' if ' ' in c else c for c in cmd))
-            if result != 0 or not os.path.isfile(pdf_path):
-                raise RuntimeError(f"LibreOffice failed for {pptx_path}")
-
-            # Upload the PDF
-            uploaded = client.files.upload(
-                file=pdf_path,
-                config=dict(mime_type='application/pdf')
-            )
-            uploaded_files.append( (os.path.basename(pptx_path), uploaded) )
-            print(f"PPTX converted & uploaded as PDF: {os.path.basename(pptx_path)}")
-            os.unlink(pdf_path)
-
-            # Optional: Clean up PDF after upload
-            # os.unlink(pdf_path)
-
-        except Exception as e:
-            print(f"Failed to process PPTX {os.path.basename(pptx_path)}: {e}")
-    return uploaded_files
-
-
-
-
-def build_gemini_contents(labeled_files, directory_map, instructions):
+def build_gemini_contents(uploaded_files: dict, repo_name: str, instructions: str):
     """
-    labeled_files: list of (label, file_obj)
-    directory_map: str
-    instructions: str
-    Returns list for Gemini contents, interleaving label and file.
+    uploaded_files: dict of rel_path -> file_obj or None
+    repo_name: string
+    instructions: string
+    Returns: list of prompt parts for Gemini API
     """
     parts = []
-    # Optional: add directory map at the start if needed
-    if directory_map:
-        parts.append(f"Directory of files:\n{directory_map}\n")
-    # Interleave file labels and file objects
-    for label, file_obj in labeled_files:
-        parts.extend([
-            f"--- FILE: {label} ---",
-            file_obj,
-            "\n"
-        ])
-    # Add your prompt/instructions at the end
+    parts.append(f"Project Directory: {repo_name}/\n")
+    for rel_path, file_obj in uploaded_files.items():
+        if file_obj is not None:
+            parts.extend([
+                f"--- FILE: {rel_path} ---",
+                file_obj,
+                "\n"
+            ])
+        else:
+            parts.extend([
+                f"--- FILE: {rel_path} [preview unavailable] ---",
+                "\n"
+            ])
     parts.append(instructions)
     return parts
 
-def analyze_uploaded_files(labeled_files, input_folder, client):
-    if not labeled_files:
+
+def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
+    if not uploaded_files:
         print("No files to analyze.")
         return
 
-    directory_map = build_directory_map(input_folder)
     instructions = (
-        "Now, carefully extract the full manufacturing requirements for EACH component. Including the quantity. "
-        "Always refer to each file using the exact filename label above. " 
-        "Also, ensure to tell me what each component looks like, if provided. " 
-        " Infer to the best of your ability. If provided data is incomplete, however, notify me."
+        "From the uploade file(s), Carefully extract the full manufacturing requirements for EACH component, including quantity. "
+        "If information is missing, make it clear. Also, briefly describe what each component looks like if info is available."
     )
-    contents = build_gemini_contents(labeled_files, directory_map, instructions)
+    contents = build_gemini_contents(uploaded_files, repo_name, instructions)
     printable = [x for x in contents if isinstance(x, str)]
-    print("\n\n" + "prompt:" + "\n".join(printable))
+    print("\n\n" + "prompt:\n" + "\n".join(printable))
 
     response = client.models.generate_content(
         model="gemini-2.5-flash",
@@ -155,9 +107,7 @@ if __name__ == "__main__":
     else:
         api_key = os.environ["GOOGLE_API_KEY"]
         client = genai.Client(api_key=api_key)
-        uploaded_pdfs   = upload_pdfs(folder, client)
-        uploaded_excels = upload_excels_as_csv(folder, client)
-        uploaded_pptx   = upload_pptx_as_pdf(folder, client)
-
-        all_uploaded    = uploaded_pdfs + uploaded_excels + uploaded_pptx
-        analyze_uploaded_files(all_uploaded, folder, client)
+        repo_name = os.path.basename(os.path.abspath(folder))
+        file_list = scan_files(folder)
+        uploaded_files = upload_files(file_list, client)
+        analyze_uploaded_files(uploaded_files, repo_name, client)
