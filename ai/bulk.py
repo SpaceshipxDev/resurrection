@@ -109,6 +109,7 @@ if __name__ == "__main__":
     else:
         api_key = os.environ["GOOGLE_API_KEY"]
         client = genai.Client(api_key=api_key)
+        
         repo_name = os.path.basename(os.path.abspath(folder))
         file_list = scan_files(folder)
         uploaded_files = upload_files(file_list, client)
