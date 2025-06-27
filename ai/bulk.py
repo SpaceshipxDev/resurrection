@@ -73,7 +73,8 @@ def build_gemini_contents(uploaded_files: dict, repo_name: str, instructions: st
             ])
         else:
             parts.extend([
-                f"--- FILE: {rel_path} [preview unavailable] ---",
+                f"--- FILE: {rel_path} ---",
+                "\n [preview unavailable] "
                 "\n"
             ])
     parts.append(instructions)
