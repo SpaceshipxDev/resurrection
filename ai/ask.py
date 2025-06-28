@@ -10,6 +10,7 @@ sample = client.files.upload(
   config=dict(mime_type='text/csv')
 )
 
+
 response = client.models.generate_content(
     model="gemini-2.5-flash",
     contents=[sample, "hwhat is this about "],

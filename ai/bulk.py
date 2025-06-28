@@ -95,7 +95,7 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
     print("\n\n" + "prompt:\n" + "\n".join(printable))
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-pro",
         contents=contents,
     )
     print(response.text)
