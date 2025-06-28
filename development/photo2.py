@@ -1,47 +1,48 @@
-import numpy as np
-from stl import mesh
-from mpl_toolkits import mplot3d
-from matplotlib import pyplot
+import pyvista as pv
 
 # --- Configuration ---
 STL_FILE = 'part.stl'
-OUTPUT_IMAGE = 'stl_image_matplotlib.png'
+OUTPUT_IMAGE = 'stl_image_pyvista.png'
 
 # --- Main Script ---
 
-# Create a new figure
-figure = pyplot.figure()
-axes = figure.add_subplot(111, projection='3d')
+# Set up the plotter. The `off_screen` argument is crucial for saving
+# a screenshot without popping up an interactive window.
+plotter = pv.Plotter(off_screen=True)
 
-# Load the STL file and add the vectors to the plot
+# Load the STL file
 try:
-    your_mesh = mesh.Mesh.from_file(STL_FILE)
+    mesh = pv.read(STL_FILE)
 except FileNotFoundError:
     print(f"Error: The file '{STL_FILE}' was not found.")
     print("Please make sure the STL file is in the same directory as the script.")
     exit()
 
-# The stl library adds the vectors to the axes
-# Matplotlib requires a list of vectors, so we just grab all the vectors
-# from the mesh.
-axes.add_collection3d(mplot3d.art3d.Poly3DCollection(your_mesh.vectors))
+# Add the mesh to the plotter
+# You can customize the color, style, etc.
+# For example: color='lightblue', style='surface', show_edges=True
+plotter.add_mesh(mesh, color='tan', show_edges=False)
 
-# Auto-scale to the mesh's size
-scale = your_mesh.points.flatten()
-axes.auto_scale_xyz(scale, scale, scale)
+# --- Camera Position (VERY USEFUL!) ---
+# You can set the camera position to get the perfect angle.
+# 'cpos' can be a string ('xy', 'yz', etc.) or a list of vectors.
+# Find the best camera angle interactively first by removing `off_screen=True`
+# and `plotter.screenshot()`, and adding `plotter.show()`. Then press 'c'
+# to print the camera position to the console and paste it here.
+# Example custom camera position:
+# plotter.camera_position = [(150, 90, 100), (-5, 10, 20), (0, 1, 0)]
 
-# Set the viewing angle (elevation, azimuth)
-axes.view_init(elev=20., azim=30)
+# Or use a standard view
+plotter.camera_position = 'iso' # Isometric view
 
-# Set labels (optional)
-axes.set_xlabel('X')
-axes.set_ylabel('Y')
-axes.set_zlabel('Z')
+# You can also add lighting features if desired
+# plotter.enable_shadows()
 
-# Save the plot to a file
+# Take the screenshot and save it
 print(f"Saving image to {OUTPUT_IMAGE}...")
-pyplot.savefig(OUTPUT_IMAGE, dpi=300) # Use a high DPI for better quality
+plotter.screenshot(OUTPUT_IMAGE, window_size=[1920, 1080]) # High resolution
+
+# Close the plotter
+plotter.close()
 
 print("Done.")
-# To show the plot interactively (optional)
-# pyplot.show()
