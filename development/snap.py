@@ -1,6 +1,3 @@
 import cadquery as cq
-from cadquery_png_plugin import export_png   # tiny wrapper around VTK off-screen
-
-shape = cq.importers.importStep("part.stp")
-export_png(shape, "preview.png", size=(800, 800))   # returns in <½ s, no window
-print("✓ preview.png written")
+shape = cq.importers.importStep("/Users/hashashin/Downloads/A260兼容吉利11V3.0侧视100度载具2D/qjr-aamk-09b-04.stp")
+cq.exporters.export(shape, 'part.stl')
