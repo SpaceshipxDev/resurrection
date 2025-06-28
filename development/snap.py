@@ -1,14 +1,6 @@
 import cadquery as cq
-from cadquery.vis import show
+from cadquery_png_plugin import export_png   # tiny wrapper around VTK off-screen
 
-step_path = "/Users/hashashin/Downloads/A260兼容吉利11V3.0侧视100度载具2D/qjr-aamk-09b-04.stp"
-shape = cq.importers.importStep(step_path)
-
-show(
-    shape,
-    width=800,
-    height=800,
-    screenshot="preview.png",
-    interact=False,        # ← THIS ensures it doesn't wait for you
-)
-print("Saved snapshot as preview.png")
+shape = cq.importers.importStep("part.stp")
+export_png(shape, "preview.png", size=(800, 800))   # returns in <½ s, no window
+print("✓ preview.png written")
