@@ -142,9 +142,8 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
         return
 
     instructions = (
-        "From the uploaded file(s), carefully extract the full manufacturing requirements for EACH component, including quantity. "
-        "If information is missing, make it clear. Also, briefly describe what each component looks like if info is available. "
-        "Note: STP files have been converted to images for visual analysis."
+        """From the uploaded customer files, carefully think through and understand all information, and tell me exactly what components my cnc 
+        factory needs to manufacture for my customer."""
     )
     contents = build_gemini_contents(uploaded_files, repo_name, instructions)
     printable = [x for x in contents if isinstance(x, str)]
