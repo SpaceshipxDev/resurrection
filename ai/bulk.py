@@ -143,7 +143,7 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
 
     instructions = (
         """From the uploaded customer files, carefully think through and understand all information, and tell me exactly what components my cnc 
-        factory needs to manufacture for my customer."""
+        factory needs to manufacture for my customer. specify each component's file path as well."""
     )
     contents = build_gemini_contents(uploaded_files, repo_name, instructions)
     printable = [x for x in contents if isinstance(x, str)]
