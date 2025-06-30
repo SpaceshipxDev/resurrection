@@ -4,95 +4,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manufacturing Components Spreadsheet</title>
+    <title>CNC Manufacturing Spreadsheet</title>
     <style>
         body {
-            font-family: 'Arial', sans-serif;
-            margin: 20px;
-            background-color: #f4f7f6;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
             color: #333;
         }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        .spreadsheet-container {
+            max-width: 100%;
+            overflow-x: auto;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             border-radius: 8px;
-            overflow-x: auto; /* For responsive table overflow */
-        }
-        h1 {
-            text-align: center;
-            color: #2c3e50;
-            margin-bottom: 30px;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
             font-size: 0.9em;
-            min-width: 700px; /* Ensures table doesn't get too narrow on small screens */
+            min-width: 1200px; /* Ensure enough width for all columns */
         }
         th, td {
-            border: 1px solid #ddd;
             padding: 12px 15px;
+            border: 1px solid #ddd;
             text-align: left;
+            vertical-align: top;
         }
         th {
-            background-color: #4CAF50;
-            color: white;
+            background-color: #e0e0e0;
             font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        tr:nth-child(even) {
-            background-color: #f2f2f2;
-        }
-        tr:hover {
-            background-color: #e9e9e9;
-            transition: background-color 0.3s ease;
-        }
-        td:nth-child(1) { /* Component Name */
-            font-weight: bold;
-            color: #0056b3;
-        }
-        td:nth-child(3) { /* Quantity */
-            text-align: center;
-        }
-        td:nth-child(4), td:nth-child(5) { /* Material, Finishing */
+            position: sticky;
+            top: 0;
+            z-index: 10;
             white-space: nowrap;
+        }
+        tbody tr:nth-child(even) {
+            background-color: #f9f9f9; /* Light gray for even rows */
+        }
+        tbody tr:nth-child(odd) {
+            background-color: #ffffff; /* White for odd rows */
+        }
+        tbody tr:hover {
+            background-color: #f0f0f0;
+        }
+        /* Column Widths - Adjust as necessary for content */
+        th:nth-child(1), td:nth-child(1) { width: 4%; } /* Item # */
+        th:nth-child(2), td:nth-child(2) { width: 12%; } /* Part Number */
+        th:nth-child(3), td:nth-child(3) { width: 10%; } /* Description */
+        th:nth-child(4), td:nth-child(4) { width: 15%; } /* File Path */
+        th:nth-child(5), td:nth-child(5) { width: 5%; } /* Quantity */
+        th:nth-child(6), td:nth-child(6) { width: 8%; } /* Material */
+        th:nth-child(7), td:nth-child(7) { width: 9%; } /* Raw Material Size */
+        th:nth-child(8), td:nth-child(8) { width: 8%; } /* Finish */
+        th:nth-child(9), td:nth-child(9) { width: 12%; } /* Critical Tolerances */
+        th:nth-child(10), td:nth-child(10) { width: 10%; } /* Operations */
+        th:nth-child(11), td:nth-child(11) { width: 6%; } /* Setup Time */
+        th:nth-child(12), td:nth-child(12) { width: 6%; } /* Cycle Time */
+        th:nth-child(13), td:nth-child(13) { width: 15%; } /* Notes */
+
+        /* Print-friendly styles */
+        @media print {
+            body {
+                background-color: #fff;
+                padding: 0;
+            }
+            .spreadsheet-container {
+                box-shadow: none;
+                border-radius: 0;
+            }
+            table {
+                font-size: 8pt;
+                min-width: unset;
+            }
+            th, td {
+                padding: 8px 10px;
+                border-color: #aaa;
+            }
+            th {
+                background-color: #e0e0e0 !important;
+                -webkit-print-color-adjust: exact;
+                color-adjust: exact;
+            }
+            tbody tr:nth-child(even) {
+                background-color: #f9f9f9 !important;
+                -webkit-print-color-adjust: exact;
+                color-adjust: exact;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Manufacturing Components Spreadsheet</h1>
+    <div class="spreadsheet-container">
         <table>
             <thead>
                 <tr>
-                    <th>Component Name</th>
+                    <th>Item #</th>
+                    <th>Part Number</th>
+                    <th>Description</th>
                     <th>File Path</th>
                     <th>Quantity</th>
                     <th>Material</th>
-                    <th>Finishing</th>
+                    <th>Raw Material Size</th>
+                    <th>Finish</th>
+                    <th>Critical Tolerances</th>
+                    <th>Operations</th>
+                    <th>Setup Time (hrs)</th>
+                    <th>Cycle Time (hrs/pc)</th>
                     <th>Notes</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
+                    <td>1</td>
                     <td>a260-jl11v-aazj-01</td>
+                    <td>Base Plate</td>
                     <td>steve_jobs/a260-jl11v-aazj-01.stp</td>
                     <td>1</td>
-                    <td>AL6061 (Aluminum 6061)</td>
-                    <td>Black Anodization (黑色阳极氧化)</td>
-                    <td>
-                        <p>1. Deburr all sharp corners and edges. Remove burrs and flashes.</p>
-                        <p>2. All dimensions are post-treatment.</p>
-                        <p>3. Unspecified chamfers C1, fillets R1, and dimensions refer to 3D model.</p>
-                        <p>4. Unspecified dimensional tolerances per GB/T1804-m.</p>
-                        <p>5. Unspecified geometric tolerances per GB/T1184-h.</p>
-                        <p>6. Part surface must be free from scratches, abrasions, dents, and other defects.</p>
-                    </td>
+                    <td>Aluminum 6061</td>
+                    <td>105mm x 135mm x 12mm plate</td>
+                    <td>Black Anodizing</td>
+                    <td>±0.01mm for specific dimensions;<br>+0.018/-0.005mm for Ø4 holes;<br>Parallelism: 0.06mm (to Datum A);<br>Surface Finish: Ra 3.2 µm</td>
+                    <td>CNC Milling, Drilling, Deburring, Anodizing</td>
+                    <td>2.5</td>
+                    <td>0.75</td>
+                    <td>All dimensions are post-finish. Deburr all edges, remove sharp corners. Unspecified chamfers (C1) and radii (R1) refer to 3D model. No scratches, abrasions, or dents on finished surfaces.</td>
                 </tr>
             </tbody>
         </table>
