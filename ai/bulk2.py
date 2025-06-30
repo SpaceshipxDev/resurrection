@@ -23,58 +23,44 @@ def scan_files(input_folder):
     return file_list
 
 
-def convert_stp_to_image(stp_path, output_image_path):
+def convert_stp_to_image(stp_path, output_dir):
     """
-    Convert STP file to PNG image via STL conversion using a robust
-    temporary directory approach.
+    Convert one STEP file to a shaded PNG and return the output path,
+    or None on failure.
     """
     try:
-        # Create a temporary directory to safely store intermediate files.
-        # This directory and its contents will be automatically deleted when
-        # the 'with' block is exited, even if errors occur.
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            # Define the path for the intermediate STL file inside the temp directory
-            stl_path = os.path.join(tmp_dir, 'temp_model.stl')
-            
-            # 1. Import STP and convert to the temporary STL file
-            shape = cq.importers.importStep(stp_path)
-            cq.exporters.export(shape, stl_path)
-            
-            # By this point, the STL file is fully written and closed.
-            # Now we can safely use it with PyVista.
+        # 1) STEP ➜ STL
+        shape = cq.importers.importStep(stp_path)
+        stl_path = tmp_path('.stl')
+        cq.exporters.export(shape, stl_path)
 
-            # 2. Set up PyVista plotter for off-screen rendering
-            plotter = pv.Plotter(off_screen=True, window_size=[1920, 1080])
-            
-            # 3. Load and render the STL from the temporary directory
-            mesh = pv.read(stl_path)
-            
-            # Check if the mesh is valid to prevent errors
-            if mesh.n_points == 0:
-                print(f"Warning: Mesh loaded from {stp_path} is empty. Skipping image generation.")
-                return False
+        # 2) Render STL
+        mesh = pv.read(stl_path)
+        mesh.compute_normals(inplace=True, auto_orient_normals=True)
 
-            plotter.add_mesh(mesh, color='tan', show_edges=False)
-            
-            # Reset camera to a good isometric view that frames the object
-            plotter.camera_position = 'iso'
+        plotter = pv.Plotter(off_screen=True)
+        plotter.add_mesh(mesh,
+                         color='tan',
+                         smooth_shading=True)
+        plotter.camera_position = 'iso'
+        plotter.enable_shadows()
+        if hasattr(plotter, "enable_ssao"):
+            plotter.enable_ssao()        # PyVista ≥0.45
+        plotter.set_background("white")
 
+        # 3) Screenshot
+        file_name = os.path.splitext(os.path.basename(stp_path))[0] + ".png"
+        out_path = os.path.join(output_dir, file_name)
+        plotter.show(screenshot=out_path, window_size=[1920,1080])
 
-            # 4. Save the screenshot to the final destination
-            plotter.screenshot(output_image_path)
-            plotter.close()
+        plotter.close()
+        os.remove(stl_path)
+        return out_path
 
-        # No need for manual os.unlink(), the TemporaryDirectory handles it!
-        return True
-        
     except Exception as e:
-        # Provide more specific error info
-        print(f"Error converting STP '{os.path.basename(stp_path)}' to image: {e}")
-        # For deeper debugging, you might want to print the full traceback:
-        # import traceback
-        # traceback.print_exc()
-        return False
-
+        print(f"[convert_stp_to_image] {stp_path}: {e}")
+        return None
+        
 
 def upload_files(file_list, client):
     """Uploads PDFs, Excels (as CSV), PPTX (as PDF), STP (as PNG). Returns dict: rel_path -> file_obj or None."""
