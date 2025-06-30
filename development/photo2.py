@@ -1,7 +1,7 @@
 import pyvista as pv
 import cadquery as cq
 
-shape = cq.importers.importStep("/Users/hashashin/Downloads/A260兼容吉利11V3.0侧视100度载具2D/qjr-aamk-02b-04lx.stp")
+shape = cq.importers.importStep("/Users/hashashin/Downloads/A260兼容吉利11V3.0侧视100度载具2D/a260-jl11v-aazj-01.stp")
 cq.exporters.export(shape, 'part.stl')
 
 # --- Configuration ---

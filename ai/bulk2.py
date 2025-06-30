@@ -1,10 +1,15 @@
 import os
+import shutil
 import tempfile
 import pandas as pd
 from google import genai
 import cadquery as cq
 import pyvista as pv
-import shutil
+
+# ---- CONFIG: Set your PNG output directory here ----
+OUTPUT_IMAGES_DIR = os.path.join(os.getcwd(), "generated_pngs")
+os.makedirs(OUTPUT_IMAGES_DIR, exist_ok=True)
+# ---------------------------------------------------
 
 def scan_files(input_folder):
     """Return a list of (relative_path, abs_path, ext) for all files under input_folder"""
@@ -13,7 +18,6 @@ def scan_files(input_folder):
         for file in files:
             abs_path = os.path.join(root, file)
             rel_path = os.path.relpath(abs_path, input_folder)
-            # extension: .pdf, .stp, etc
             ext = os.path.splitext(file)[-1].lower()
             file_list.append((rel_path, abs_path, ext))
     return file_list
@@ -92,7 +96,8 @@ def upload_files(file_list, client):
                 
                 if convert_stp_to_image(abs_path, png_path):
                     # Save a permanent copy of PNG
-                    final_png_path = os.path.join(output_images_dir, os.path.splitext(os.path.basename(rel_path))[0] + ".png")
+                    final_png_name = os.path.splitext(os.path.basename(rel_path))[0] + ".png"
+                    final_png_path = os.path.join(OUTPUT_IMAGES_DIR, final_png_name)
                     shutil.copy2(png_path, final_png_path)
                     
                     obj = client.files.upload(file=png_path, config=dict(mime_type='image/png'))
@@ -139,7 +144,6 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
         """
     )
     
-    # Build prompt parts
     parts = []
     parts.append(f"Project Directory: {repo_name}/\n")
     for rel_path, file_obj in uploaded_files.items():
@@ -166,7 +170,6 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
             contents=parts,
         )
 
-        # Clean up response - strip markdown wrappers if present
         html_rows = response.text.strip()
         if html_rows.startswith('html') and html_rows.endswith(''):
             html_rows = html_rows[7:-3].strip()
@@ -175,7 +178,6 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
             if len(lines) > 2:
                 html_rows = '\n'.join(lines[1:-1])
 
-        # Save to HTML file
         with open("template.html", "r", encoding="utf-8") as f:
             html_template = f.read()
 
@@ -203,4 +205,4 @@ if __name__ == "__main__":
         repo_name = os.path.basename(os.path.abspath(folder))
         file_list = scan_files(folder)
         uploaded_files = upload_files(file_list, client)
-        analyze_uploaded_files(uploaded_files, repo_name, client) 
+        analyze_uploaded_files(uploaded_files, repo_name, client)
