@@ -12,8 +12,6 @@ Dependencies ▸  cadquery, pyvista, pandas, google‑genai, LibreOffice (only i
 import os
 import tempfile
 import pandas as pd
-import cadquery as cq
-import pyvista as pv
 from google import genai
 
 # ────────────────────────────────────────────────────────────────
@@ -32,11 +30,16 @@ def scan_files(root: str):
 
 # ────────────────────────────────────────────────────────────────
 # 2.  STEP → PNG preview (clean shading)
+#     Lazy‑import cadquery / pyvista so we avoid seg‑faults when the
+#     script runs on jobs **without** any STEP files.
 # ────────────────────────────────────────────────────────────────
 
 def stp_to_png(stp_path: str, png_path: str) -> bool:
+    """Render *stp_path* to *png_path* (white background, iso view)."""
     try:
-        print(f"Rendering: {stp_path}")
+        import cadquery as cq  # heavy C++ deps – pull only when needed
+        import pyvista as pv
+
         shape = cq.importers.importStep(stp_path)
         with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as tmp:
             stl_path = tmp.name
@@ -46,18 +49,49 @@ def stp_to_png(stp_path: str, png_path: str) -> bool:
         mesh.clean(inplace=True)
         mesh.compute_normals(inplace=True)
 
-        with pv.Plotter(off_screen=True, window_size=[800,800]) as plotter:
-            plotter.set_background("white")
-            plotter.add_mesh(mesh, color="#c0b090", smooth_shading=True, specular=0.2)
-            plotter.camera_position = "iso"
-            plotter.screenshot(png_path)
+        plotter = pv.Plotter(off_screen=True, window_size=[800, 800])
+        plotter.set_background("white")
+        plotter.add_mesh(mesh, color="#c0b090", smooth_shading=True, specular=0.2)
+        plotter.camera_position = "iso"
+        plotter.screenshot(png_path)
+        plotter.close()
+        os.unlink(stl_path)
+        return True
+    except ModuleNotFoundError:
+        print("cadquery / pyvista not installed → skip preview.")
+        return False
+    except Exception as exc:
+        print(f"[STP→PNG ❌] {stp_path}: {exc}")
+        return False
 
+# ────────────────────────────────────────────────────────────────
+
+def stp_to_png(stp_path: str, png_path: str) -> bool:
+    """Render *stp_path* to *png_path* (white BG, smooth shading, iso view)."""
+    try:
+        shape = cq.importers.importStep(stp_path)
+        #   Export a temporary STL – quick & robust for meshing
+        with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as tmp:
+            stl_path = tmp.name
+        cq.exporters.export(shape, stl_path, tolerance=0.05)
+
+        mesh = pv.read(stl_path)
+        mesh.clean(inplace=True)  # remove degenerate faces
+        mesh.compute_normals(inplace=True)
+
+        plotter = pv.Plotter(off_screen=True, window_size=[800, 800])
+        plotter.set_background("white")
+        plotter.add_mesh(mesh, color="#c0b090", smooth_shading=True, specular=0.2)
+        plotter.camera_position = "iso"
+        plotter.show_grid(False)
+        plotter.screenshot(png_path)
+        plotter.close()
         os.unlink(stl_path)
         return True
     except Exception as exc:
         print(f"[STP→PNG ❌] {stp_path}: {exc}")
         return False
-        
+
 # ────────────────────────────────────────────────────────────────
 # 3.  Upload logic
 # ────────────────────────────────────────────────────────────────
