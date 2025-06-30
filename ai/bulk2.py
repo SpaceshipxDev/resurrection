@@ -9,6 +9,9 @@ import pyvista as pv
 # ---- CONFIG: Set your PNG output directory here ----
 OUTPUT_IMAGES_DIR = os.path.join(os.getcwd(), "generated_pngs")
 os.makedirs(OUTPUT_IMAGES_DIR, exist_ok=True)
+
+OUTPUT_STL_DIR = os.path.join(os.getcwd(), "generated_stls")
+os.makedirs(OUTPUT_STL_DIR, exist_ok=True)
 # ---------------------------------------------------
 
 def scan_files(input_folder):
@@ -23,36 +26,33 @@ def scan_files(input_folder):
     return file_list
 
 def convert_stp_to_image(stp_path, output_image_path):
-    """Convert STP file to PNG image via STL conversion"""
+    """Convert STP file to PNG image via STL conversion, saving STL as permanent file."""
     try:
         # Import STP and convert to STL
         shape = cq.importers.importStep(stp_path)
-        
-        # Create temporary STL file
-        with tempfile.NamedTemporaryFile(suffix='.stl', delete=False) as tmp_stl:
-            stl_path = tmp_stl.name
-            cq.exporters.export(shape, stl_path)
-        
+
+        # Set up STL path (named after the original file)
+        base_name = os.path.splitext(os.path.basename(stp_path))[0]
+        stl_path = os.path.join(OUTPUT_STL_DIR, f"{base_name}.stl")
+        cq.exporters.export(shape, stl_path)
+
         # Set up PyVista plotter for off-screen rendering
         plotter = pv.Plotter(off_screen=True)
-        
-        # Load and render the STL
         mesh = pv.read(stl_path)
         plotter.add_mesh(mesh, color='tan', show_edges=False)
         plotter.camera_position = 'iso'  # Isometric view
-        
+
         # Save screenshot
         plotter.screenshot(output_image_path, window_size=[1920, 1080])
         plotter.close()
-        
-        # Clean up temporary STL
-        os.unlink(stl_path)
-        
+
+        # No temp STL to delete; file is permanent now!
         return True
-        
+
     except Exception as e:
         print(f"Error converting STP to image: {e}")
         return False
+
 
 def upload_files(file_list, client):
     """Uploads PDFs, Excels (as CSV), PPTX (as PDF), STP (as PNG). Returns dict: rel_path -> file_obj or None."""
