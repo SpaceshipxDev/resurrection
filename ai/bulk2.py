@@ -48,6 +48,7 @@ def convert_stp_to_image(stp_path, output_image_path):
     except Exception as e:
         print(f"Error converting STP to image: {e}")
         return False
+        
 
 def upload_files(file_list, client):
     """Uploads PDFs, Excels (as CSV), PPTX (as PDF), STP (as PNG). Returns dict: rel_path -> file_obj or None."""
@@ -106,49 +107,6 @@ def upload_files(file_list, client):
             uploaded[rel_path] = None
     return uploaded
 
-def build_gemini_contents(uploaded_files: dict, repo_name: str, instructions: str):
-    """
-    uploaded_files: dict of rel_path -> file_obj or None
-    repo_name: string
-    instructions: string
-    Returns: list of prompt parts for Gemini API
-    """
-    parts = []
-    parts.append(f"Project Directory: {repo_name}/\n")
-    for rel_path, file_obj in uploaded_files.items():
-        if file_obj is not None:
-            # Add note for STP files that they've been converted to images
-            file_note = ""
-            if rel_path.lower().endswith('.stp'):
-                file_note = " (converted to image for analysis)"
-            
-            parts.extend([
-                f"--- FILE: {rel_path}{file_note} ---",
-                file_obj,
-                "\n"
-            ])
-        else:
-            parts.extend([
-                f"--- FILE: {rel_path} ---",
-                "\n [preview unavailable] "
-                "\n"
-            ])
-    parts.append(instructions)
-    return parts
-
-
-def save_stable_html(table_rows, output_filename):
-    # Read the fixed HTML template
-    with open("template.html", "r", encoding="utf-8") as f:
-        html_template = f.read()
-
-    complete_html = html_template.replace("{{TABLE_BODY}}", table_rows)
-    # Save the final HTML to a named file
-    with open(output_filename, "w", encoding="utf-8") as f:
-        f.write(complete_html)
-    print(f"✅ HTML spreadsheet generated: {output_filename}")
-
-
 
 def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
     if not uploaded_files:
@@ -176,27 +134,54 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
         """
     )
     
-    contents = build_gemini_contents(uploaded_files, repo_name, instructions)
-    printable = [x for x in contents if isinstance(x, str)]
-    print("\n\n" + "Sending request to Gemini for HTML spreadsheet generation...")
+    # Build prompt parts
+    parts = []
+    parts.append(f"Project Directory: {repo_name}/\n")
+    for rel_path, file_obj in uploaded_files.items():
+        if file_obj is not None:
+            file_note = " (converted to image for analysis)" if rel_path.lower().endswith('.stp') else ""
+            parts.extend([
+                f"--- FILE: {rel_path}{file_note} ---",
+                file_obj,
+                "\n"
+            ])
+        else:
+            parts.extend([
+                f"--- FILE: {rel_path} ---",
+                "\n [preview unavailable] "
+                "\n"
+            ])
+    parts.append(instructions)
+    
+    print("\n\nSending request to Gemini for HTML spreadsheet generation...")
 
     try:
         response = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=contents,
+            contents=parts,
         )
 
-        html_table_rows = response.text.strip()
+        # Clean up response - strip markdown wrappers if present
+        html_rows = response.text.strip()
+        if html_rows.startswith('```html') and html_rows.endswith('```'):
+            html_rows = html_rows[7:-3].strip()
+        elif html_rows.startswith('```') and html_rows.endswith('```'):
+            lines = html_rows.split('\n')
+            if len(lines) > 2:
+                html_rows = '\n'.join(lines[1:-1])
 
-        save_stable_html(html_table_rows, f"{repo_name}_components.html")
+        # Save to HTML file
+        with open("template.html", "r", encoding="utf-8") as f:
+            html_template = f.read()
+
+        complete_html = html_template.replace("{{TABLE_BODY}}", html_rows)
+        output_file = f"{repo_name}_components.html"
         
-        if output_file:
-            print(f"\nGenerated HTML spreadsheet successfully!")
-            print(f"You can open '{output_file}' in your web browser to view the component analysis.")
-        else:
-            print("\nHTML content generated but couldn't save to file. Here's the content:")
-            print(html_content)
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(complete_html)
             
+        print(f"✅ HTML spreadsheet generated: {output_file}")
+        
     except Exception as e:
         print(f"Error generating HTML spreadsheet: {e}")
 
