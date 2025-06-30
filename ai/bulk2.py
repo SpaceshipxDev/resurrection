@@ -4,6 +4,7 @@ import pandas as pd
 from google import genai
 import cadquery as cq
 import pyvista as pv
+import shutil
 
 def scan_files(input_folder):
     """Return a list of (relative_path, abs_path, ext) for all files under input_folder"""
@@ -90,9 +91,13 @@ def upload_files(file_list, client):
                     png_path = tmp_img.name
                 
                 if convert_stp_to_image(abs_path, png_path):
+                    # Save a permanent copy of PNG
+                    final_png_path = os.path.join(output_images_dir, os.path.splitext(os.path.basename(rel_path))[0] + ".png")
+                    shutil.copy2(png_path, final_png_path)
+                    
                     obj = client.files.upload(file=png_path, config=dict(mime_type='image/png'))
                     uploaded[rel_path] = obj
-                    print(f"STP converted & uploaded as PNG: {rel_path}")
+                    print(f"STP converted & uploaded as PNG: {rel_path} (saved at {final_png_path})")
                     os.unlink(png_path)
                 else:
                     uploaded[rel_path] = None
