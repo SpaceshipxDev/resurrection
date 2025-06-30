@@ -35,31 +35,29 @@ def scan_files(root: str):
 # ────────────────────────────────────────────────────────────────
 
 def stp_to_png(stp_path: str, png_path: str) -> bool:
-    """Render *stp_path* to *png_path* (white BG, smooth shading, iso view)."""
     try:
+        print(f"Rendering: {stp_path}")
         shape = cq.importers.importStep(stp_path)
-        #   Export a temporary STL – quick & robust for meshing
         with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as tmp:
             stl_path = tmp.name
         cq.exporters.export(shape, stl_path, tolerance=0.05)
 
         mesh = pv.read(stl_path)
-        mesh.clean(inplace=True)  # remove degenerate faces
+        mesh.clean(inplace=True)
         mesh.compute_normals(inplace=True)
 
-        plotter = pv.Plotter(off_screen=True, window_size=[800, 800])
-        plotter.set_background("white")
-        plotter.add_mesh(mesh, color="#c0b090", smooth_shading=True, specular=0.2)
-        plotter.camera_position = "iso"
-        plotter.show_grid(False)
-        plotter.screenshot(png_path)
-        plotter.close()
+        with pv.Plotter(off_screen=True, window_size=[800,800]) as plotter:
+            plotter.set_background("white")
+            plotter.add_mesh(mesh, color="#c0b090", smooth_shading=True, specular=0.2)
+            plotter.camera_position = "iso"
+            plotter.screenshot(png_path)
+
         os.unlink(stl_path)
         return True
     except Exception as exc:
         print(f"[STP→PNG ❌] {stp_path}: {exc}")
         return False
-
+        
 # ────────────────────────────────────────────────────────────────
 # 3.  Upload logic
 # ────────────────────────────────────────────────────────────────
