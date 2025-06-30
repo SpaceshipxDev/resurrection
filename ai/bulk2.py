@@ -136,17 +136,19 @@ def build_gemini_contents(uploaded_files: dict, repo_name: str, instructions: st
     parts.append(instructions)
     return parts
 
-def save_html_output(html_content, repo_name):
-    """Save the HTML content to a file"""
-    output_filename = f"{repo_name}_manufacturing_components.html"
-    try:
-        with open(output_filename, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-        print(f"\nHTML spreadsheet saved as: {output_filename}")
-        return output_filename
-    except Exception as e:
-        print(f"Error saving HTML file: {e}")
-        return None
+
+def save_stable_html(table_rows, output_filename):
+    # Read the fixed HTML template
+    with open("template.html", "r", encoding="utf-8") as f:
+        html_template = f.read()
+
+    complete_html = html_template.replace("{{TABLE_BODY}}", table_rows)
+    # Save the final HTML to a named file
+    with open(output_filename, "w", encoding="utf-8") as f:
+        f.write(complete_html)
+    print(f"✅ HTML spreadsheet generated: {output_filename}")
+
+
 
 def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
     if not uploaded_files:
@@ -154,32 +156,24 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
         return
 
     instructions = (
-        """From the uploaded customer files, analyze all components that need to be manufactured and create a complete HTML spreadsheet using this EXACT standard format.
+        """
+        Analyze each uploaded STP file (your converted PNG images) and generate ONLY the HTML rows (`<tr>` and `<td>` tags precisely) in simplified format as shown below. 
 
-        IMPORTANT: Generate a complete, standalone HTML document with this EXACT table structure:
+        Example of expected format (DO NOT generate table headers or any CSS):
 
-        STANDARD SPREADSHEET COLUMNS (must be exactly these 4 columns):
-        1. 产品名称 (STP filename without extension)
-        2. 材料 (Material type - e.g., Aluminum, Steel, Stainless Steel, etc.)
-        3. 数量 (Quantity needed)
-        4. 规格 (Finishing/specifications - e.g., Anodized, Powder Coated, As Machined, etc.)
+        <tr>
+            <td>产品名称示例</td>
+            <td>材料示例</td>
+            <td>数量示例</td>
+            <td>规格示例</td>
+        </tr>
 
-        HTML REQUIREMENTS:
-        - Complete HTML document with <!DOCTYPE html>
-        - Professional CSS styling with clean table appearance
-        - Fixed header row
-        - Alternating row colors (white/light gray)
-        - Bordered cells with proper spacing
-        - UTF-8 encoding for Chinese characters
-        - Print-friendly layout
+        - Precisely one row per STP file.
+        - 产品名称 should be STP filename without ".stp".
+        - Choose realistic materials, quantities, and specifications.
 
-        ANALYSIS REQUIREMENTS:
-        - Analyze each STP file thoroughly
-        - One row per STP file
-        - Extract realistic material and quantity requirements
-        - Specify appropriate finishing based on component analysis
-
-        Generate ONLY the complete HTML code with proper Chinese character support - no explanation text before or after."""
+        Provide ONLY exact HTML rows, no explanations or other markup at all.
+        """
     )
     
     contents = build_gemini_contents(uploaded_files, repo_name, instructions)
@@ -191,11 +185,10 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
             model="gemini-2.5-flash",
             contents=contents,
         )
-        
-        html_content = response.text
-        
-        # Save the HTML to a file
-        output_file = save_html_output(html_content, repo_name)
+
+        html_table_rows = response.text.strip()
+
+        save_stable_html(html_table_rows, f"{repo_name}_components.html")
         
         if output_file:
             print(f"\nGenerated HTML spreadsheet successfully!")
@@ -206,6 +199,7 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
             
     except Exception as e:
         print(f"Error generating HTML spreadsheet: {e}")
+
 
 if __name__ == "__main__":
     folder = input("Enter folder path to scan: ").strip()
