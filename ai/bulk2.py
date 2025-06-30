@@ -48,7 +48,7 @@ def convert_stp_to_image(stp_path, output_image_path):
     except Exception as e:
         print(f"Error converting STP to image: {e}")
         return False
-        
+
 
 def upload_files(file_list, client):
     """Uploads PDFs, Excels (as CSV), PPTX (as PDF), STP (as PNG). Returns dict: rel_path -> file_obj or None."""
@@ -115,7 +115,7 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
 
     instructions = (
         """
-        Analyze each uploaded STP file (your converted PNG images) and generate ONLY the HTML rows (`<tr>` and `<td>` tags precisely) in simplified format as shown below. 
+        Carefully Analyze each uploaded STP file (your converted PNG images) and generate ONLY the HTML rows (`<tr>` and `<td>` tags precisely) in simplified format as shown below. 
 
         Example of expected format (DO NOT generate table headers or any CSS):
 
@@ -126,7 +126,7 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
             <td>规格示例</td>
         </tr>
 
-        - Precisely one row per STP file.
+        - Precisely one row per inferred component.
         - 产品名称 should be STP filename without ".stp".
         - Choose realistic materials, quantities, and specifications.
 
