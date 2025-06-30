@@ -1,10 +1,10 @@
 """Simple end-to-end pipeline with nice previews
 ─────────────────────────────────────────────
 • Walk an input folder, find engineering files
-• For every STEP (`.stp`) render a clean isometric PNG preview (same basename)
-• Upload everything to Gemini-for-workspace (`google-genai`)
-• Ask Gemini to return an HTML table **with an image column**
-• Merge the rows into `template.html`, producing `<repo>_components.html`
+• For every STEP (.stp) render a clean isometric PNG preview (same basename)
+• Upload everything to Gemini-for-workspace (google-genai)
+• Ask Gemini to return an HTML table with an image column
+• Merge the rows into template.html, producing <repo>_components.html
 
 Dependencies ▸  cadquery, pyvista, pandas, google-genai, LibreOffice (only if you want .pptx→.pdf)
 """
@@ -12,8 +12,6 @@ Dependencies ▸  cadquery, pyvista, pandas, google-genai, LibreOffice (only if 
 import os
 import tempfile
 import pandas as pd
-import cadquery as cq
-import pyvista as pv
 from google import genai
 
 # ────────────────────────────────────────────────────────────────
@@ -21,7 +19,7 @@ from google import genai
 # ────────────────────────────────────────────────────────────────
 
 def scan_files(root: str):
-    """Return a list (rel_path, abs_path, ext) for everything under *root*."""
+    """Return a list (rel_path, abs_path, ext) for everything under root."""
     out = []
     for dirpath, _, files in os.walk(root):
         for fn in files:
@@ -32,47 +30,18 @@ def scan_files(root: str):
 
 # ────────────────────────────────────────────────────────────────
 # 2.  STEP → PNG preview (clean shading)
-#     Lazy-import cadquery / pyvista so we avoid seg-faults when the
-#     script runs on jobs **without** any STEP files.
 # ────────────────────────────────────────────────────────────────
 
 def stp_to_png(stp_path: str, png_path: str) -> bool:
-    """Render *stp_path* to *png_path* (white background, iso view)."""
+    """Render stp_path to png_path (white BG, smooth shading, iso view)."""
     try:
-        import cadquery as cq  # heavy C++ deps – pull only when needed
+        # Import heavy deps ONLY when actually needed
+        import cadquery as cq
         import pyvista as pv
-
+        
         shape = cq.importers.importStep(stp_path)
-        with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as tmp:
-            stl_path = tmp.name
-        cq.exporters.export(shape, stl_path, tolerance=0.05)
-
-        mesh = pv.read(stl_path)
-        mesh.clean(inplace=True)
-        mesh.compute_normals(inplace=True)
-
-        plotter = pv.Plotter(off_screen=True, window_size=[800, 800])
-        plotter.set_background("white")
-        plotter.add_mesh(mesh, color="#c0b090", smooth_shading=True, specular=0.2)
-        plotter.camera_position = "iso"
-        plotter.screenshot(png_path)
-        plotter.close()
-        os.unlink(stl_path)
-        return True
-    except ModuleNotFoundError:
-        print("cadquery / pyvista not installed → skip preview.")
-        return False
-    except Exception as exc:
-        print(f"[STP→PNG ❌] {stp_path}: {exc}")
-        return False
-
-# ────────────────────────────────────────────────────────────────
-
-def stp_to_png(stp_path: str, png_path: str) -> bool:
-    """Render *stp_path* to *png_path* (white BG, smooth shading, iso view)."""
-    try:
-        shape = cq.importers.importStep(stp_path)
-        #   Export a temporary STL – quick & robust for meshing
+        
+        # Export a temporary STL – quick & robust for meshing
         with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as tmp:
             stl_path = tmp.name
         cq.exporters.export(shape, stl_path, tolerance=0.05)
@@ -90,6 +59,9 @@ def stp_to_png(stp_path: str, png_path: str) -> bool:
         plotter.close()
         os.unlink(stl_path)
         return True
+    except ModuleNotFoundError:
+        print("cadquery / pyvista not installed → skip preview.")
+        return False
     except Exception as exc:
         print(f"[STP→PNG ❌] {stp_path}: {exc}")
         return False
@@ -100,7 +72,7 @@ def stp_to_png(stp_path: str, png_path: str) -> bool:
 
 def upload_files(file_list, client):
     """Upload supported files and STEP previews.
-
+    
     Returns
     -------
     uploads : dict  { filename → file_obj }
@@ -146,9 +118,14 @@ def upload_files(file_list, client):
                 else:
                     print("[skip] could not render", rel)
 
+            # DWG files (AutoCAD) ──────────────────
+            elif ext == ".dwg":
+                print("[skip] DWG files not supported (need CAD software or converter)")
+
             # Unsupported ─────────────────────────
             else:
-                print("[skip] unsupported", rel)
+                if ext not in [".ds_store"]:  # Don't spam about system files
+                    print("[skip] unsupported", rel)
 
         except Exception as exc:
             print(f"[❌] {rel}: {exc}")
@@ -167,7 +144,8 @@ def generate_html(uploads: dict, repo: str, client):
     prompt = """
 从客户上传的文件中识别每个零件，推断材料、数量及表面处理。
 
-只输出 `<tr>` 表格行，列顺序为：
+只输出 <tr> 表格行，列顺序为：
+
 <tr>
   <td>产品名称</td>
   <td><img …></td>
@@ -176,9 +154,11 @@ def generate_html(uploads: dict, repo: str, client):
   <td>规格</td>
 </tr>
 
-- 产品名称 = STP 文件名去掉后缀
-- `<img>` 请引用同名 PNG，写成 `<img src=\"FILE.png\" width=\"120\">`
-- 不要输出解释、标题或 ``` 代码块
+产品名称 = STP 文件名去掉后缀
+
+<img> 请引用同名 PNG，写成 <img src=\"FILE.png\" width=\"120\">
+
+不要输出解释、标题或 ``` 代码块
 """
 
     parts = [f"Project: {repo}\n"]
@@ -200,6 +180,7 @@ def generate_html(uploads: dict, repo: str, client):
         with open(out_name, "w", encoding="utf-8") as f:
             f.write(html)
         print("✅  HTML written →", out_name)
+
     except Exception as exc:
         print("[Gemini ❌]", exc)
 
