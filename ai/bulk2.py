@@ -57,8 +57,8 @@ def convert_stp_to_image(stp_path, output_image_path):
             plotter.add_mesh(mesh, color='tan', show_edges=False)
             
             # Reset camera to a good isometric view that frames the object
-            plotter.view_iso() 
-            plotter.camera.zoom(1.2) # Zoom in a little to fill the frame better
+            plotter.camera_position = 'iso'
+
 
             # 4. Save the screenshot to the final destination
             plotter.screenshot(output_image_path)
@@ -75,7 +75,7 @@ def convert_stp_to_image(stp_path, output_image_path):
         # traceback.print_exc()
         return False
 
-        
+
 def upload_files(file_list, client):
     """Uploads PDFs, Excels (as CSV), PPTX (as PDF), STP (as PNG). Returns dict: rel_path -> file_obj or None."""
     uploaded = {}
