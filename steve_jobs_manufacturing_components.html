@@ -1,139 +1,109 @@
 ```html
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CNC Manufacturing Spreadsheet</title>
+    <title>制造零件清单</title>
     <style>
+        @page {
+            size: A4 landscape; /* For print-friendly landscape A4 */
+            margin: 10mm;
+        }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f4f4f4;
+            margin: 20px;
             color: #333;
-        }
-        .spreadsheet-container {
-            max-width: 100%;
-            overflow-x: auto;
-            background-color: #fff;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            border-radius: 8px;
+            background-color: #f4f4f4;
         }
         table {
             width: 100%;
             border-collapse: collapse;
+            margin: 25px 0;
             font-size: 0.9em;
-            min-width: 1200px; /* Ensure enough width for all columns */
+            min-width: 400px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+            table-layout: fixed; /* Ensures fixed column widths */
         }
         th, td {
             padding: 12px 15px;
             border: 1px solid #ddd;
             text-align: left;
-            vertical-align: top;
+            word-wrap: break-word; /* Prevents long text from overflowing cells */
         }
         th {
-            background-color: #e0e0e0;
-            font-weight: bold;
-            position: sticky;
+            background-color: #009879;
+            color: #ffffff;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            position: sticky; /* Fixed header */
             top: 0;
             z-index: 10;
-            white-space: nowrap;
         }
         tbody tr:nth-child(even) {
-            background-color: #f9f9f9; /* Light gray for even rows */
+            background-color: #f8f8f8; /* Light gray for even rows */
         }
         tbody tr:nth-child(odd) {
             background-color: #ffffff; /* White for odd rows */
         }
         tbody tr:hover {
-            background-color: #f0f0f0;
+            background-color: #f1f1f1;
+            cursor: pointer;
         }
-        /* Column Widths - Adjust as necessary for content */
-        th:nth-child(1), td:nth-child(1) { width: 4%; } /* Item # */
-        th:nth-child(2), td:nth-child(2) { width: 12%; } /* Part Number */
-        th:nth-child(3), td:nth-child(3) { width: 10%; } /* Description */
-        th:nth-child(4), td:nth-child(4) { width: 15%; } /* File Path */
-        th:nth-child(5), td:nth-child(5) { width: 5%; } /* Quantity */
-        th:nth-child(6), td:nth-child(6) { width: 8%; } /* Material */
-        th:nth-child(7), td:nth-child(7) { width: 9%; } /* Raw Material Size */
-        th:nth-child(8), td:nth-child(8) { width: 8%; } /* Finish */
-        th:nth-child(9), td:nth-child(9) { width: 12%; } /* Critical Tolerances */
-        th:nth-child(10), td:nth-child(10) { width: 10%; } /* Operations */
-        th:nth-child(11), td:nth-child(11) { width: 6%; } /* Setup Time */
-        th:nth-child(12), td:nth-child(12) { width: 6%; } /* Cycle Time */
-        th:nth-child(13), td:nth-child(13) { width: 15%; } /* Notes */
+        /* Column Widths (Adjust as needed) */
+        th:nth-child(1), td:nth-child(1) { width: 25%; } /* 产品名称 */
+        th:nth-child(2), td:nth-child(2) { width: 15%; } /* 材料 */
+        th:nth-child(3), td:nth-child(3) { width: 10%; } /* 数量 */
+        th:nth-child(4), td:nth-child(4) { width: 50%; } /* 规格 */
 
-        /* Print-friendly styles */
+        /* Print-specific styles */
         @media print {
             body {
                 background-color: #fff;
-                padding: 0;
-            }
-            .spreadsheet-container {
-                box-shadow: none;
-                border-radius: 0;
+                margin: 0;
             }
             table {
-                font-size: 8pt;
-                min-width: unset;
-            }
-            th, td {
-                padding: 8px 10px;
-                border-color: #aaa;
+                box-shadow: none;
+                font-size: 0.8em;
             }
             th {
-                background-color: #e0e0e0 !important;
-                -webkit-print-color-adjust: exact;
-                color-adjust: exact;
+                background-color: #e0e0e0 !important; /* Lighter background for print */
+                color: #000 !important;
+                -webkit-print-color-adjust: exact; /* Ensure background prints */
+                print-color-adjust: exact;
             }
             tbody tr:nth-child(even) {
-                background-color: #f9f9f9 !important;
+                background-color: #f0f0f0 !important;
                 -webkit-print-color-adjust: exact;
-                color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            tbody tr:hover {
+                background-color: #f1f1f1 !important;
             }
         }
     </style>
 </head>
 <body>
-    <div class="spreadsheet-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>Item #</th>
-                    <th>Part Number</th>
-                    <th>Description</th>
-                    <th>File Path</th>
-                    <th>Quantity</th>
-                    <th>Material</th>
-                    <th>Raw Material Size</th>
-                    <th>Finish</th>
-                    <th>Critical Tolerances</th>
-                    <th>Operations</th>
-                    <th>Setup Time (hrs)</th>
-                    <th>Cycle Time (hrs/pc)</th>
-                    <th>Notes</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>1</td>
-                    <td>a260-jl11v-aazj-01</td>
-                    <td>Base Plate</td>
-                    <td>steve_jobs/a260-jl11v-aazj-01.stp</td>
-                    <td>1</td>
-                    <td>Aluminum 6061</td>
-                    <td>105mm x 135mm x 12mm plate</td>
-                    <td>Black Anodizing</td>
-                    <td>±0.01mm for specific dimensions;<br>+0.018/-0.005mm for Ø4 holes;<br>Parallelism: 0.06mm (to Datum A);<br>Surface Finish: Ra 3.2 µm</td>
-                    <td>CNC Milling, Drilling, Deburring, Anodizing</td>
-                    <td>2.5</td>
-                    <td>0.75</td>
-                    <td>All dimensions are post-finish. Deburr all edges, remove sharp corners. Unspecified chamfers (C1) and radii (R1) refer to 3D model. No scratches, abrasions, or dents on finished surfaces.</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>产品名称</th>
+                <th>材料</th>
+                <th>数量</th>
+                <th>规格</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>a260-jl11v-aazj-01</td>
+                <td>AL6061 (铝合金6061)</td>
+                <td>1</td>
+                <td>黑色阳极氧化, 去毛刺</td>
+            </tr>
+        </tbody>
+    </table>
+
 </body>
 </html>
 ```
