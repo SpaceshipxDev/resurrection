@@ -1,13 +1,12 @@
-"""Simple end‑to‑end pipeline
----------------------------------
-*   Walk an input folder, find engineering files
-*   For every STEP (`.stp`) render an isometric PNG preview **with the same base name**
-*   Upload everything to Gemini‑for‑workspace (via `google‑genai`)
-*   Ask Gemini to return an HTML table that already embeds the preview images
-*   Drop the rows into `template.html`, producing `<repo>_components.html`
-    (make sure your template has a column for images)
+"""Simple end‑to‑end pipeline with nice previews
+─────────────────────────────────────────────
+• Walk an input folder, find engineering files
+• For every STEP (`.stp`) render a clean isometric PNG preview (same basename)
+• Upload everything to Gemini‑for‑workspace (`google‑genai`)
+• Ask Gemini to return an HTML table **with an image column**
+• Merge the rows into `template.html`, producing `<repo>_components.html`
 
-External requirements  ▸  cadquery, pyvista, pandas, google‑genai, LibreOffice (optional for .pptx ⇒ .pdf)
+Dependencies ▸  cadquery, pyvista, pandas, google‑genai, LibreOffice (only if you want .pptx→.pdf)
 """
 
 import os
@@ -22,7 +21,7 @@ from google import genai
 # ────────────────────────────────────────────────────────────────
 
 def scan_files(root: str):
-    """Return a list ‹(rel_path, abs_path, ext)› under *root*"""
+    """Return a list (rel_path, abs_path, ext) for everything under *root*."""
     out = []
     for dirpath, _, files in os.walk(root):
         for fn in files:
@@ -32,21 +31,28 @@ def scan_files(root: str):
     return out
 
 # ────────────────────────────────────────────────────────────────
-# 2.  STEP → PNG preview
+# 2.  STEP → PNG preview (clean shading)
 # ────────────────────────────────────────────────────────────────
 
 def stp_to_png(stp_path: str, png_path: str) -> bool:
-    """Render *stp_path* to *png_path* (isometric, 1920×1080)."""
+    """Render *stp_path* to *png_path* (white BG, smooth shading, iso view)."""
     try:
         shape = cq.importers.importStep(stp_path)
+        #   Export a temporary STL – quick & robust for meshing
         with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as tmp:
             stl_path = tmp.name
-        cq.exporters.export(shape, stl_path)
+        cq.exporters.export(shape, stl_path, tolerance=0.05)
 
-        plotter = pv.Plotter(off_screen=True)
-        plotter.add_mesh(pv.read(stl_path), color="tan", show_edges=False)
+        mesh = pv.read(stl_path)
+        mesh.clean(inplace=True)  # remove degenerate faces
+        mesh.compute_normals(inplace=True)
+
+        plotter = pv.Plotter(off_screen=True, window_size=[800, 800])
+        plotter.set_background("white")
+        plotter.add_mesh(mesh, color="#c0b090", smooth_shading=True, specular=0.2)
         plotter.camera_position = "iso"
-        plotter.screenshot(png_path, window_size=[1920, 1080])
+        plotter.show_grid(False)
+        plotter.screenshot(png_path)
         plotter.close()
         os.unlink(stl_path)
         return True
@@ -59,24 +65,22 @@ def stp_to_png(stp_path: str, png_path: str) -> bool:
 # ────────────────────────────────────────────────────────────────
 
 def upload_files(file_list, client):
-    """Upload supported files.
+    """Upload supported files and STEP previews.
 
-    For every STEP we create & upload a PNG preview (same basename).
-
-    Returns (uploads, preview_paths)
-        uploads:        {filename → file_obj}
-        preview_paths:  local paths of created PNG previews (for optional later use)
+    Returns
+    -------
+    uploads : dict  { filename → file_obj }
     """
-    uploads, preview_paths = {}, []
+    uploads = {}
 
     for rel, abs_path, ext in file_list:
         try:
-            # -------------- PDF --------------
+            # PDF ──────────────────────────────────
             if ext == ".pdf":
                 uploads[rel] = client.files.upload(file=abs_path, config={"mime_type": "application/pdf"})
                 print("⬆︎ PDF", rel)
 
-            # -------------- Excel --------------
+            # Excel ────────────────────────────────
             elif ext in (".xls", ".xlsx"):
                 df = pd.read_excel(abs_path)
                 with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
@@ -86,7 +90,7 @@ def upload_files(file_list, client):
                 os.unlink(csv_path)
                 print("⬆︎ Excel→CSV", rel)
 
-            # -------------- PPTX (to PDF) --------------
+            # PPTX → PDF ───────────────────────────
             elif ext == ".pptx":
                 outdir = os.path.dirname(abs_path)
                 pdf_path = os.path.join(outdir, os.path.splitext(os.path.basename(abs_path))[0] + ".pdf")
@@ -98,25 +102,24 @@ def upload_files(file_list, client):
                 os.unlink(pdf_path)
                 print("⬆︎ PPTX→PDF", rel)
 
-            # -------------- STEP --------------
+            # STEP ─────────────────────────────────
             elif ext == ".stp":
                 base = os.path.splitext(os.path.basename(rel))[0]
-                png_name = f"{base}.png"   # preview saved in cwd – keeps things simple
+                png_name = f"{base}.png"  # saved in CWD
                 if stp_to_png(abs_path, png_name):
                     uploads[png_name] = client.files.upload(file=png_name, config={"mime_type": "image/png"})
-                    preview_paths.append(png_name)
                     print("⬆︎ STP preview", png_name)
                 else:
                     print("[skip] could not render", rel)
 
-            # -------------- Unsupported --------------
+            # Unsupported ─────────────────────────
             else:
                 print("[skip] unsupported", rel)
 
         except Exception as exc:
             print(f"[❌] {rel}: {exc}")
 
-    return uploads, preview_paths
+    return uploads
 
 # ────────────────────────────────────────────────────────────────
 # 4.  Ask Gemini & build HTML
@@ -128,20 +131,20 @@ def generate_html(uploads: dict, repo: str, client):
         return
 
     prompt = """
-从客户上传的文件中，识别每一个零件并推断其材料、数量及表面处理规格。
+从客户上传的文件中识别每个零件，推断材料、数量及表面处理。
 
-输出 **仅包含** 表格行（`<tr>`…`</tr>`），列顺序严格如下：
+只输出 `<tr>` 表格行，列顺序为：
 <tr>
-    <td>产品名称</td>
-    <td>图片</td>
-    <td>材料</td>
-    <td>数量</td>
-    <td>规格</td>
+  <td>产品名称</td>
+  <td><img …></td>
+  <td>材料</td>
+  <td>数量</td>
+  <td>规格</td>
 </tr>
 
-- 产品名称 = 对应 STP 文件去掉后缀的文件名
-- 图片列请嵌入 `<img src="同名.png" width="160">`
-- 不要输出解释、标题、``` 包围块或任何额外内容
+- 产品名称 = STP 文件名去掉后缀
+- `<img>` 请引用同名 PNG，写成 `<img src=\"FILE.png\" width=\"120\">`
+- 不要输出解释、标题或 ``` 代码块
 """
 
     parts = [f"Project: {repo}\n"]
@@ -149,11 +152,10 @@ def generate_html(uploads: dict, repo: str, client):
         parts += [f"--- FILE: {name} ---", file_obj, "\n"]
     parts.append(prompt)
 
-    print("📡  Sending prompt to Gemini…")
+    print("📡  Prompting Gemini…")
     try:
         res = client.models.generate_content(model="gemini-2.5-flash", contents=parts)
         rows = res.text.strip()
-        # strip markdown fences if present
         if rows.startswith("```"):
             rows = "\n".join(rows.splitlines()[1:-1]).strip()
 
@@ -163,7 +165,7 @@ def generate_html(uploads: dict, repo: str, client):
         out_name = f"{repo}_components.html"
         with open(out_name, "w", encoding="utf-8") as f:
             f.write(html)
-        print("✅  HTML generated →", out_name)
+        print("✅  HTML written →", out_name)
     except Exception as exc:
         print("[Gemini ❌]", exc)
 
@@ -183,6 +185,5 @@ if __name__ == "__main__":
     client = genai.Client(api_key=api_key)
 
     repo_name = os.path.basename(os.path.abspath(folder))
-    files = scan_files(folder)
-    uploads, _previews = upload_files(files, client)
+    uploads = upload_files(scan_files(folder), client)
     generate_html(uploads, repo_name, client)
