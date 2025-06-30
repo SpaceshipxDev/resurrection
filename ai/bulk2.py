@@ -121,14 +121,15 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
         Example of expected format:
 
         <tr>
-            <td>产品名称示例</td>
-            <td>材料示例</td>
-            <td>数量示例</td>
-            <td>规格示例</td>
+            <td>产品名称</td>
+            <td>材料</td>
+            <td>数量</td>
+            <td>规格</td>
         </tr>
 
         - Precisely one row per inferred component.
         - 产品名称 should be STP filename without ".stp".
+        - 规格 refers to the surface finish. 
         - Infer  materials, quantities, and specifications.
 
         Provide ONLY exact HTML rows, no explanations or other markup at all.
