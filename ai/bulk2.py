@@ -154,42 +154,32 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
         return
 
     instructions = (
-        """From the uploaded customer files, analyze all components that need to be manufactured and create a complete HTML spreadsheet using the STANDARD CNC MANUFACTURING FORMAT.
+        """From the uploaded customer files, analyze all components that need to be manufactured and create a complete HTML spreadsheet using this EXACT standard format.
 
-IMPORTANT: Generate a complete, standalone HTML document with this EXACT table structure:
+        IMPORTANT: Generate a complete, standalone HTML document with this EXACT table structure:
 
-STANDARD SPREADSHEET COLUMNS (in this exact order):
-1. Item # (sequential numbering: 1, 2, 3...)
-2. Part Number (STP filename without extension)
-3. Description (brief component description)
-4. File Path (full relative path to STP file)
-5. Quantity (qty needed for assembly)
-6. Material (e.g., Aluminum 6061, Steel 1018, Stainless 316, etc.)
-7. Raw Material Size (stock dimensions needed)
-8. Finish (e.g., Anodized, Powder Coated, As Machined, etc.)
-9. Critical Tolerances (±0.001", ±0.005", etc.)
-10. Operations (Milling, Turning, Drilling, etc.)
-11. Setup Time (est. hours)
-12. Cycle Time (est. hours per piece)
-13. Notes (special requirements, threads, etc.)
+        STANDARD SPREADSHEET COLUMNS (must be exactly these 4 columns):
+        1. 产品名称 (STP filename without extension)
+        2. 材料 (Material type - e.g., Aluminum, Steel, Stainless Steel, etc.)
+        3. 数量 (Quantity needed)
+        4. 规格 (Finishing/specifications - e.g., Anodized, Powder Coated, As Machined, etc.)
 
-HTML REQUIREMENTS:
-- Complete HTML document with <!DOCTYPE html>
-- Professional CSS styling with Excel-like appearance
-- Fixed header row that stays visible when scrolling
-- Alternating row colors (white/light gray)
-- Bordered cells with proper spacing
-- Column widths optimized for content
-- Print-friendly layout
+        HTML REQUIREMENTS:
+        - Complete HTML document with <!DOCTYPE html>
+        - Professional CSS styling with clean table appearance
+        - Fixed header row
+        - Alternating row colors (white/light gray)
+        - Bordered cells with proper spacing
+        - UTF-8 encoding for Chinese characters
+        - Print-friendly layout
 
-ANALYSIS REQUIREMENTS:
-- Analyze each STP file thoroughly
-- Extract manufacturing requirements from technical drawings
-- Provide realistic time estimates
-- Specify appropriate materials based on application
-- Include all necessary manufacturing operations
+        ANALYSIS REQUIREMENTS:
+        - Analyze each STP file thoroughly
+        - One row per STP file
+        - Extract realistic material and quantity requirements
+        - Specify appropriate finishing based on component analysis
 
-Generate ONLY the complete HTML code - no explanation text before or after."""
+        Generate ONLY the complete HTML code with proper Chinese character support - no explanation text before or after."""
     )
     
     contents = build_gemini_contents(uploaded_files, repo_name, instructions)
