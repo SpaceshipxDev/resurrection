@@ -1,204 +1,201 @@
-"""Simple end-to-end pipeline with nice previews
-─────────────────────────────────────────────
-• Walk an input folder, find engineering files
-• For every STEP (.stp) render a clean isometric PNG preview (same basename)
-• Upload everything to Gemini-for-workspace (google-genai)
-• Ask Gemini to return an HTML table with an image column
-• Merge the rows into template.html, producing <repo>_components.html
-
-Dependencies ▸  cadquery, pyvista, pandas, google-genai, LibreOffice (only if you want .pptx→.pdf)
-"""
-
 import os
 import tempfile
 import pandas as pd
 from google import genai
+import cadquery as cq
+import pyvista as pv
 
-# ────────────────────────────────────────────────────────────────
-# 1.  Collect files
-# ────────────────────────────────────────────────────────────────
+def scan_files(input_folder):
+    """Return a list of (relative_path, abs_path, ext) for all files under input_folder"""
+    file_list = []
+    for root, _, files in os.walk(input_folder):
+        for file in files:
+            abs_path = os.path.join(root, file)
+            rel_path = os.path.relpath(abs_path, input_folder)
+            # extension: .pdf, .stp, etc
+            ext = os.path.splitext(file)[-1].lower()
+            file_list.append((rel_path, abs_path, ext))
+    return file_list
 
-def scan_files(root: str):
-    """Return a list (rel_path, abs_path, ext) for everything under root."""
-    out = []
-    for dirpath, _, files in os.walk(root):
-        for fn in files:
-            abs_path = os.path.join(dirpath, fn)
-            rel_path = os.path.relpath(abs_path, root)
-            out.append((rel_path, abs_path, os.path.splitext(fn)[1].lower()))
-    return out
-
-# ────────────────────────────────────────────────────────────────
-# 2.  STEP → PNG preview (clean shading)
-# ────────────────────────────────────────────────────────────────
-
-def stp_to_png(stp_path: str, png_path: str) -> bool:
-    """Render stp_path to png_path (white BG, smooth shading, iso view)."""
+def convert_stp_to_image(stp_path, output_image_path):
+    """Convert STP file to PNG image via STL conversion"""
     try:
-        # Import heavy deps ONLY when actually needed
-        import cadquery as cq
-        import pyvista as pv
-        
+        # Import STP and convert to STL
         shape = cq.importers.importStep(stp_path)
         
-        # Export a temporary STL – quick & robust for meshing
-        with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as tmp:
-            stl_path = tmp.name
-        cq.exporters.export(shape, stl_path, tolerance=0.05)
-
+        # Create temporary STL file
+        with tempfile.NamedTemporaryFile(suffix='.stl', delete=False) as tmp_stl:
+            stl_path = tmp_stl.name
+            cq.exporters.export(shape, stl_path)
+        
+        # Set up PyVista plotter for off-screen rendering
+        plotter = pv.Plotter(off_screen=True)
+        
+        # Load and render the STL
         mesh = pv.read(stl_path)
-        mesh.clean(inplace=True)  # remove degenerate faces
-        mesh.compute_normals(inplace=True)
-
-        plotter = pv.Plotter(off_screen=True, window_size=[800, 800])
-        plotter.set_background("white")
-        plotter.add_mesh(mesh, color="#c0b090", smooth_shading=True, specular=0.2)
-        plotter.camera_position = "iso"
-        plotter.show_grid(False)
-        plotter.screenshot(png_path)
+        plotter.add_mesh(mesh, color='tan', show_edges=False)
+        plotter.camera_position = 'iso'  # Isometric view
+        
+        # Save screenshot
+        plotter.screenshot(output_image_path, window_size=[1920, 1080])
         plotter.close()
+        
+        # Clean up temporary STL
         os.unlink(stl_path)
+        
         return True
-    except ModuleNotFoundError:
-        print("cadquery / pyvista not installed → skip preview.")
+        
+    except Exception as e:
+        print(f"Error converting STP to image: {e}")
         return False
-    except Exception as exc:
-        print(f"[STP→PNG ❌] {stp_path}: {exc}")
-        return False
-
-# ────────────────────────────────────────────────────────────────
-# 3.  Upload logic
-# ────────────────────────────────────────────────────────────────
 
 def upload_files(file_list, client):
-    """Upload supported files and STEP previews.
-    
-    Returns
-    -------
-    uploads : dict  { filename → file_obj }
-    """
-    uploads = {}
-
-    for rel, abs_path, ext in file_list:
+    """Uploads PDFs, Excels (as CSV), PPTX (as PDF), STP (as PNG). Returns dict: rel_path -> file_obj or None."""
+    uploaded = {}
+    for rel_path, abs_path, ext in file_list:
         try:
-            # PDF ──────────────────────────────────
-            if ext == ".pdf":
-                uploads[rel] = client.files.upload(file=abs_path, config={"mime_type": "application/pdf"})
-                print("⬆︎ PDF", rel)
-
-            # Excel ────────────────────────────────
-            elif ext in (".xls", ".xlsx"):
+            if ext == '.pdf':
+                obj = client.files.upload(file=abs_path, config=dict(mime_type='application/pdf'))
+                uploaded[rel_path] = obj
+                print(f"Uploaded PDF: {rel_path}")
+                
+            elif ext in ('.xls', '.xlsx'):
                 df = pd.read_excel(abs_path)
-                with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
+                with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
                     csv_path = tmp.name
-                df.to_csv(csv_path, index=False)
-                uploads[rel] = client.files.upload(file=csv_path, config={"mime_type": "text/csv"})
+                    df.to_csv(csv_path, index=False)
+                obj = client.files.upload(file=csv_path, config=dict(mime_type='text/csv'))
+                uploaded[rel_path] = obj
+                print(f"Excel converted & uploaded as CSV: {rel_path}")
                 os.unlink(csv_path)
-                print("⬆︎ Excel→CSV", rel)
-
-            # PPTX → PDF ───────────────────────────
-            elif ext == ".pptx":
-                outdir = os.path.dirname(abs_path)
-                pdf_path = os.path.join(outdir, os.path.splitext(os.path.basename(abs_path))[0] + ".pdf")
-                cmd = ["libreoffice", "--headless", "--convert-to", "pdf", "--outdir", outdir, abs_path]
-                res = os.system(" ".join(f'"{c}"' if " " in c else c for c in cmd))
-                if res or not os.path.isfile(pdf_path):
-                    raise RuntimeError("LibreOffice conversion failed")
-                uploads[rel] = client.files.upload(file=pdf_path, config={"mime_type": "application/pdf"})
+                
+            elif ext == '.pptx':
+                output_dir = os.path.dirname(abs_path)
+                base_name = os.path.splitext(os.path.basename(abs_path))[0]
+                pdf_path = os.path.join(output_dir, base_name + '.pdf')
+                cmd = [
+                    "libreoffice", "--headless", "--convert-to", "pdf", "--outdir", output_dir, abs_path
+                ]
+                result = os.system(' '.join(f'"{c}"' if ' ' in c else c for c in cmd))
+                if result != 0 or not os.path.isfile(pdf_path):
+                    raise RuntimeError(f"LibreOffice failed for {rel_path}")
+                obj = client.files.upload(file=pdf_path, config=dict(mime_type='application/pdf'))
+                uploaded[rel_path] = obj
+                print(f"PPTX converted & uploaded as PDF: {rel_path}")
                 os.unlink(pdf_path)
-                print("⬆︎ PPTX→PDF", rel)
-
-            # STEP ─────────────────────────────────
-            elif ext == ".stp":
-                base = os.path.splitext(os.path.basename(rel))[0]
-                png_name = f"{base}.png"  # saved in CWD
-                if stp_to_png(abs_path, png_name):
-                    uploads[png_name] = client.files.upload(file=png_name, config={"mime_type": "image/png"})
-                    print("⬆︎ STP preview", png_name)
+                
+            elif ext == '.stp':
+                # Convert STP to PNG image
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_img:
+                    png_path = tmp_img.name
+                
+                if convert_stp_to_image(abs_path, png_path):
+                    obj = client.files.upload(file=png_path, config=dict(mime_type='image/png'))
+                    uploaded[rel_path] = obj
+                    print(f"STP converted & uploaded as PNG: {rel_path}")
+                    os.unlink(png_path)
                 else:
-                    print("[skip] could not render", rel)
-
-            # DWG files (AutoCAD) ──────────────────
-            elif ext == ".dwg":
-                print("[skip] DWG files not supported (need CAD software or converter)")
-
-            # Unsupported ─────────────────────────
+                    uploaded[rel_path] = None
+                    print(f"Failed to convert STP: {rel_path}")
+                    
             else:
-                if ext not in [".ds_store"]:  # Don't spam about system files
-                    print("[skip] unsupported", rel)
+                uploaded[rel_path] = None  # Not supported
+                
+        except Exception as e:
+            print(f"Failed to process {rel_path}: {e}")
+            uploaded[rel_path] = None
+    return uploaded
 
-        except Exception as exc:
-            print(f"[❌] {rel}: {exc}")
-
-    return uploads
-
-# ────────────────────────────────────────────────────────────────
-# 4.  Ask Gemini & build HTML
-# ────────────────────────────────────────────────────────────────
-
-def generate_html(uploads: dict, repo: str, client):
-    if not uploads:
-        print("Nothing to analyse → abort.")
+def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
+    if not uploaded_files:
+        print("No files to analyze.")
         return
 
-    prompt = """
-从客户上传的文件中识别每个零件，推断材料、数量及表面处理。
+    instructions = (
+        """
+        From the customer's uploaded folder, carefully analyze it and seperate it into individual components with their respective attributes.  
+        Generate the HTML rows (<tr> and <td> tags precisely) in simplified format as shown below. 
 
-只输出 <tr> 表格行，列顺序为：
+        Example of expected format:
 
-<tr>
-  <td>产品名称</td>
-  <td><img …></td>
-  <td>材料</td>
-  <td>数量</td>
-  <td>规格</td>
-</tr>
+        <tr>
+            <td>产品名称</td>
+            <td>材料</td>
+            <td>数量</td>
+            <td>规格</td>
+        </tr>
 
-产品名称 = STP 文件名去掉后缀
+        - Precisely one row per inferred component.
+        - 产品名称 should be STP filename without ".stp".
+        - 规格 refers to the surface finish. 
+        - Infer  materials, quantities, and specifications.
 
-<img> 请引用同名 PNG，写成 <img src=\"FILE.png\" width=\"120\">
+        Provide ONLY exact HTML rows, no explanations or other markup at all.
+        """
+    )
+    
+    # Build prompt parts
+    parts = []
+    parts.append(f"Project Directory: {repo_name}/\n")
+    for rel_path, file_obj in uploaded_files.items():
+        if file_obj is not None:
+            file_note = " (converted to image for analysis)" if rel_path.lower().endswith('.stp') else ""
+            parts.extend([
+                f"--- FILE: {rel_path}{file_note} ---",
+                file_obj,
+                "\n"
+            ])
+        else:
+            parts.extend([
+                f"--- FILE: {rel_path} ---",
+                "\n [preview unavailable] "
+                "\n"
+            ])
+    parts.append(instructions)
+    
+    print("\n\nSending request to Gemini for HTML spreadsheet generation...")
 
-不要输出解释、标题或 ``` 代码块
-"""
-
-    parts = [f"Project: {repo}\n"]
-    for name, file_obj in uploads.items():
-        parts += [f"--- FILE: {name} ---", file_obj, "\n"]
-    parts.append(prompt)
-
-    print("📡  Prompting Gemini…")
     try:
-        res = client.models.generate_content(model="gemini-2.5-flash", contents=parts)
-        rows = res.text.strip()
-        if rows.startswith("```"):
-            rows = "\n".join(rows.splitlines()[1:-1]).strip()
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=parts,
+        )
 
+        # Clean up response - strip markdown wrappers if present
+        html_rows = response.text.strip()
+        if html_rows.startswith('html') and html_rows.endswith(''):
+            html_rows = html_rows[7:-3].strip()
+        elif html_rows.startswith('') and html_rows.endswith(''):
+            lines = html_rows.split('\n')
+            if len(lines) > 2:
+                html_rows = '\n'.join(lines[1:-1])
+
+        # Save to HTML file
         with open("template.html", "r", encoding="utf-8") as f:
-            html = f.read().replace("{{TABLE_BODY}}", rows)
+            html_template = f.read()
 
-        out_name = f"{repo}_components.html"
-        with open(out_name, "w", encoding="utf-8") as f:
-            f.write(html)
-        print("✅  HTML written →", out_name)
-
-    except Exception as exc:
-        print("[Gemini ❌]", exc)
-
-# ────────────────────────────────────────────────────────────────
-# 5.  Entrypoint
-# ────────────────────────────────────────────────────────────────
+        complete_html = html_template.replace("{{TABLE_BODY}}", html_rows)
+        output_file = f"{repo_name}_components.html"
+        
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(complete_html)
+            
+        print(f"✅ HTML spreadsheet generated: {output_file}")
+        
+    except Exception as e:
+        print(f"Error generating HTML spreadsheet: {e}")
 
 if __name__ == "__main__":
-    folder = input("📂  Folder to scan → ").strip()
+    folder = input("Enter folder path to scan: ").strip()
     if not os.path.isdir(folder):
-        raise SystemExit("Not a directory.")
-
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise SystemExit("Set GOOGLE_API_KEY.")
-
-    client = genai.Client(api_key=api_key)
-
-    repo_name = os.path.basename(os.path.abspath(folder))
-    uploads = upload_files(scan_files(folder), client)
-    generate_html(uploads, repo_name, client)
+        print("Invalid directory.")
+    elif "GOOGLE_API_KEY" not in os.environ:
+        print("Set GOOGLE_API_KEY in your environment variables.")
+    else:
+        api_key = os.environ["GOOGLE_API_KEY"]
+        client = genai.Client(api_key=api_key)
+        
+        repo_name = os.path.basename(os.path.abspath(folder))
+        file_list = scan_files(folder)
+        uploaded_files = upload_files(file_list, client)
+        analyze_uploaded_files(uploaded_files, repo_name, client) 
