@@ -115,9 +115,10 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
 
     instructions = (
         """
-        Carefully Analyze each uploaded STP file (your converted PNG images) and generate ONLY the HTML rows (`<tr>` and `<td>` tags precisely) in simplified format as shown below. 
+        From the customer's uploaded folder, carefully analyze it and seperate it into individual components with their respective attributes.  
+        Generate the HTML rows (`<tr>` and `<td>` tags precisely) in simplified format as shown below. 
 
-        Example of expected format (DO NOT generate table headers or any CSS):
+        Example of expected format:
 
         <tr>
             <td>产品名称示例</td>
@@ -128,7 +129,7 @@ def analyze_uploaded_files(uploaded_files: dict, repo_name: str, client):
 
         - Precisely one row per inferred component.
         - 产品名称 should be STP filename without ".stp".
-        - Choose realistic materials, quantities, and specifications.
+        - Infer  materials, quantities, and specifications.
 
         Provide ONLY exact HTML rows, no explanations or other markup at all.
         """
