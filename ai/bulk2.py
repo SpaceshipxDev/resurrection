@@ -1,17 +1,19 @@
-"""Simple end‑to‑end pipeline with nice previews
+"""Simple end-to-end pipeline with nice previews
 ─────────────────────────────────────────────
 • Walk an input folder, find engineering files
 • For every STEP (`.stp`) render a clean isometric PNG preview (same basename)
-• Upload everything to Gemini‑for‑workspace (`google‑genai`)
+• Upload everything to Gemini-for-workspace (`google-genai`)
 • Ask Gemini to return an HTML table **with an image column**
 • Merge the rows into `template.html`, producing `<repo>_components.html`
 
-Dependencies ▸  cadquery, pyvista, pandas, google‑genai, LibreOffice (only if you want .pptx→.pdf)
+Dependencies ▸  cadquery, pyvista, pandas, google-genai, LibreOffice (only if you want .pptx→.pdf)
 """
 
 import os
 import tempfile
 import pandas as pd
+import cadquery as cq
+import pyvista as pv
 from google import genai
 
 # ────────────────────────────────────────────────────────────────
@@ -30,7 +32,7 @@ def scan_files(root: str):
 
 # ────────────────────────────────────────────────────────────────
 # 2.  STEP → PNG preview (clean shading)
-#     Lazy‑import cadquery / pyvista so we avoid seg‑faults when the
+#     Lazy-import cadquery / pyvista so we avoid seg-faults when the
 #     script runs on jobs **without** any STEP files.
 # ────────────────────────────────────────────────────────────────
 
