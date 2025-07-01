@@ -4,7 +4,6 @@ import pandas as pd
 from google import genai
 import cadquery as cq
 import pyvista as pv
-import shutil
 
 def scan_files(input_folder):
     """Return a list of (relative_path, abs_path, ext) for all files under input_folder"""
@@ -19,58 +18,37 @@ def scan_files(input_folder):
     return file_list
 
 def convert_stp_to_image(stp_path, output_image_path):
+    """Convert STP file to PNG image via STL conversion"""
     try:
-        # Import STP file
+        # Import STP and convert to STL
         shape = cq.importers.importStep(stp_path)
-
-        # Make sure STL directory exists
-        stl_dir = os.path.join(os.path.dirname(stp_path), "generated_stl")
-        os.makedirs(stl_dir, exist_ok=True)
-        base_name = os.path.splitext(os.path.basename(stp_path))[0]
-        stl_path = os.path.join(stl_dir, base_name + ".stl")
-
-        # Export as STL with explicit tolerances for better quality
-        cq.exporters.export(shape, stl_path, tolerance=0.01, angularTolerance=0.1)
-
-        # Load STL mesh into PyVista
-        mesh = pv.read(stl_path)
-
-        # Normalize position and scale (optional, recommended)
-        mesh.center(inplace=True)
-        # mesh.scale([0.1, 0.1, 0.1], inplace=True) # as needed for your situation
-
-        # Setup off-screen plotter explicitly
-        plotter = pv.Plotter(off_screen=True)
-        plotter.background_color = 'white'   # Clean background for clarity
-        plotter.enable_anti_aliasing()       # Improved output rendering
-
-        # Add mesh with smooth shading
-        plotter.add_mesh(
-            mesh, 
-            color='tan', 
-            show_edges=False, 
-            smooth_shading=True
-        )
-
-        # Explicit camera viewpoint (set from interactive tuning earlier)
-        plotter.camera_position = [(120, 45, 90), (0, 0, 0), (0, 1, 0)]  # Replace this with your chosen position!
-
-        # Final high-res screenshot, explicitly specify resolution
-        image = plotter.screenshot(None, window_size=[3840, 2160]) # 4K for clarity
-        pv.utilities.save_png(output_image_path, image)
-
-        plotter.close()
-
-        print(f"Successfully saved STL: {stl_path}")
-        print(f"Successfully saved PNG screenshot: {output_image_path}")
-
-        return True
-
-    except Exception as e:
-        print(f"Rendering error encountered: {e}")
-        return False
         
-            
+        # Create temporary STL file
+        with tempfile.NamedTemporaryFile(suffix='.stl', delete=False) as tmp_stl:
+            stl_path = tmp_stl.name
+            cq.exporters.export(shape, stl_path)
+        
+        # Set up PyVista plotter for off-screen rendering
+        plotter = pv.Plotter(off_screen=True)
+        
+        # Load and render the STL
+        mesh = pv.read(stl_path)
+        plotter.add_mesh(mesh, color='tan', show_edges=False)
+        plotter.camera_position = 'iso'  # Isometric view
+        
+        # Save screenshot
+        plotter.screenshot(output_image_path, window_size=[1920, 1080])
+        plotter.close()
+        
+        # Clean up temporary STL
+        os.unlink(stl_path)
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error converting STP to image: {e}")
+        return False
+
 def upload_files(file_list, client):
     """Uploads PDFs, Excels (as CSV), PPTX (as PDF), STP (as PNG). Returns dict: rel_path -> file_obj or None."""
     uploaded = {}
@@ -110,23 +88,11 @@ def upload_files(file_list, client):
                 # Convert STP to PNG image
                 with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_img:
                     png_path = tmp_img.name
-
+                
                 if convert_stp_to_image(abs_path, png_path):
                     obj = client.files.upload(file=png_path, config=dict(mime_type='image/png'))
                     uploaded[rel_path] = obj
                     print(f"STP converted & uploaded as PNG: {rel_path}")
-
-                    # --- SAVE PERMANENT PNG COPY ---
-                    # Save all generated PNGs into a "generated_pngs" directory inside the scanned folder
-                    save_dir = os.path.join(os.path.dirname(abs_path), "generated_pngs")
-                    os.makedirs(save_dir, exist_ok=True)
-                    # Use the same base name as the .stp, but .png
-                    base_name = os.path.splitext(os.path.basename(abs_path))[0] + ".png"
-                    save_path = os.path.join(save_dir, base_name)
-                    shutil.copy(png_path, save_path)
-                    print(f"Saved PNG to: {save_path}")
-                    # --- END ---
-
                     os.unlink(png_path)
                 else:
                     uploaded[rel_path] = None
@@ -139,7 +105,6 @@ def upload_files(file_list, client):
             print(f"Failed to process {rel_path}: {e}")
             uploaded[rel_path] = None
     return uploaded
-
 
 def build_gemini_contents(uploaded_files: dict, repo_name: str, instructions: str):
     """
