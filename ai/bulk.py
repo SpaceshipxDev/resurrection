@@ -35,7 +35,7 @@ def convert_stp_to_image(stp_path, output_image_path):
         cq.exporters.export(shape, stl_path)
         print(f"STL saved to: {stl_path}")
         # --- END SAVE STL ---
-        time.sleep(2)
+        time.sleep(10)
 
         STL_FILE=stl_path 
         OUTPUT_IMAGE="made.png"
