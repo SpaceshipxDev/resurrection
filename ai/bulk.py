@@ -38,7 +38,7 @@ def convert_stp_to_image(stp_path, output_image_path):
         time.sleep(2)
 
         STL_FILE=stl_path 
-        OUTPUT_IMAGE=output_image_path 
+        OUTPUT_IMAGE="made.png"
 
         plotter = pv.Plotter(off_screen=True) 
         mesh = pv.read(STL_FILE) 
