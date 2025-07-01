@@ -1,102 +1,72 @@
+"""
+STEP ➜ off-screen PNG snapshot
+--------------------------------
+Requires:
+    conda install -c conda-forge cadquery pyvista
+or
+    pip install cadquery pyvista
+
+Tested on macOS 14 (Apple M-series) + Python 3.12
+"""
+
+import cadquery as cq
 import pyvista as pv
-import os
 import numpy as np
+import os
+import sys
 
-# --- Import necessary OCC libraries ---
-from OCC.Core.STEPControl import STEPControl_Reader
-from OCC.Core.IFSelect import IFSelect_RetDone
-from OCC.Core.BRepMesh import BRepMesh_IncrementalMesh
-from OCC.Core.TopExp import TopExp_Explorer
-from OCC.Core.TopAbs import TopAbs_FACE
-from OCC.Core.TopoDS import topods
-from OCC.Core.BRep import BRep_Tool
-from OCC.Core.TopLoc import TopLoc_Location
+# ========= CONFIG =========
+STP_FILE = "/Users/hashashin/Documents/grokkk/a260-jl11v-aazj-01.stp"   # <-- change path
+PNG_FILE = "model_snapshot_final.png"
+TESSELLATION_ACCURACY = 0.1   # mm; smaller = finer mesh
+WINDOW_SIZE = (1920, 1080)
+# ==========================
 
-# Define the input STP file and the output PNG file
-stp_file = '/Users/hashashin/Documents/grokkk/a260-jl11v-aazj-01.stp'  # <-- Change this to your file path
-png_file = 'model_snapshot_final.png'
+# --- basic sanity check ---
+if not os.path.exists(STP_FILE):
+    sys.exit(f"ERROR: file not found → {STP_FILE}")
 
-if not os.path.exists(stp_file):
-    print(f"Error: The file '{stp_file}' was not found.")
+print("🔄  Loading STEP with CadQuery …")
+shape_or_wp = cq.importers.importStep(STP_FILE)
+
+# CadQuery returns either a Workplane or a plain Shape.  Extract a Shape:
+if isinstance(shape_or_wp, cq.Workplane):
+    occt_shape = cq.Compound.makeCompound([s.val() for s in shape_or_wp.solids()])
 else:
-    try:
-        # 1. Read STP file
-        print("Reading STP file directly with OCC...")
-        step_reader = STEPControl_Reader()
-        status = step_reader.ReadFile(stp_file)
-        if status != IFSelect_RetDone:
-            raise RuntimeError("Error: STEP file could not be read.")
-        step_reader.TransferRoots()
-        shape = step_reader.OneShape()
-        print("STP file read successfully.")
+    occt_shape = shape_or_wp  # already a Shape/Compound
 
-        # 2. Tessellate shape
-        print("Tessellating shape into a mesh...")
-        linear_deflection = 0.1
-        angular_deflection = 0.5
-        BRepMesh_IncrementalMesh(shape, linear_deflection, False, angular_deflection, True)
+print("🔄  Tessellating …")
+# Tessellate once; returns (vertices, triangles) lists
+verts, tris = occt_shape.tessellate(TESSELLATION_ACCURACY)
 
-        # 3. Extract vertices and faces for PyVista
-        vertices = []
-        faces = []
-        vertex_offset = 0
+# --- build a PyVista PolyData ---
+vertices = np.asarray(verts, dtype=np.float64)
 
-        explorer = TopExp_Explorer(shape, TopAbs_FACE)
-        while explorer.More():
-            face = topods.Face(explorer.Current())
-            location = TopLoc_Location()
-            triangulation = BRep_Tool.Triangulation(face, location)
+# PyVista wants a flat array whose layout is: [N, i0, i1, i2,  N, i0, i1, i2, …]
+faces = np.hstack(
+    [
+        np.full((len(tris), 1), 3, dtype=np.int64),      # leading "3" = triangle
+        np.asarray(tris, dtype=np.int64)
+    ]
+).flatten()
 
-            if triangulation is None:
-                explorer.Next()
-                continue
+mesh = pv.PolyData(vertices, faces)
+print(f"   ➜ Mesh: {len(vertices)} vertices, {len(tris)} triangles")
 
-            trsf = location.Transformation()
+print("🎨  Rendering off-screen …")
+plotter = pv.Plotter(off_screen=True, window_size=WINDOW_SIZE)
+plotter.add_mesh(
+    mesh,
+    color="lightblue",
+    show_edges=True,
+    edge_color="gray",
+    lighting=True,
+    specular=0.5,
+    specular_power=15,
+)
+plotter.set_background("white")
+plotter.view_isometric()
+plotter.camera.zoom(0.9)
+plotter.screenshot(PNG_FILE)
 
-            # --- FIX: Use capitalized accessors ---
-            nodes_array = triangulation.Nodes()
-            triangles_array = triangulation.Triangles()
-            nb_nodes = triangulation.NbNodes()
-            nb_tris = triangulation.NbTriangles()
-
-            # Add vertices, OCC arrays are 1-indexed
-            for i in range(1, nb_nodes + 1):
-                p = nodes_array.Value(i)
-                p.Transform(trsf)
-                vertices.append([p.X(), p.Y(), p.Z()])
-
-            # Add faces (triangles)
-            for i in range(1, nb_tris + 1):
-                t = triangles_array.Value(i)
-                v1, v2, v3 = t.Get()
-                faces.extend([
-                    3,
-                    v1 - 1 + vertex_offset,
-                    v2 - 1 + vertex_offset,
-                    v3 - 1 + vertex_offset
-                ])
-
-            vertex_offset += nb_nodes
-            explorer.Next()
-
-        print(f"Mesh extracted: {len(vertices)} vertices, {len(faces)//4} faces.")
-
-        # 4. Create PyVista Mesh and Plot
-        mesh = pv.PolyData(np.asarray(vertices, dtype=np.float64),
-                           np.asarray(faces, dtype=np.int64))
-        print("PyVista mesh created successfully.")
-
-        plotter = pv.Plotter(off_screen=True)
-        plotter.add_mesh(mesh, color='lightblue', show_edges=True, edge_color='gray',
-                         lighting=True, specular=0.5, specular_power=15)
-        plotter.set_background('white')
-        plotter.view_isometric()
-        plotter.camera.zoom(0.9)
-        plotter.screenshot(png_file, window_size=[1920, 1080])
-
-        print(f"Successfully saved snapshot to {png_file}")
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"An error occurred: {e}")
+print(f"✅  Snapshot saved → {os.path.abspath(PNG_FILE)}")
