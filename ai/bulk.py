@@ -48,11 +48,13 @@ def convert_stp_to_image(stp_path, output_image_path):
 
         # --------- RELOAD STL FROM DISK -----------
         STL_FILE = stl_path
+        OUTPUT_IMAGE="made.png" 
+
         plotter = pv.Plotter(off_screen=True)
         mesh = pv.read(STL_FILE)
         plotter.add_mesh(mesh, color="tan", show_edges=False)
         plotter.camera_position = "iso"
-        plotter.screenshot(output_image_path, window_size=[1920, 1080])
+        plotter.screenshot(OUTPUT_IMAGE, window_size=[1920, 1080])
         plotter.close()
         return True
 
