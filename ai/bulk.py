@@ -4,6 +4,7 @@ import pandas as pd
 from google import genai
 import cadquery as cq
 import pyvista as pv
+import shutil
 
 def scan_files(input_folder):
     """Return a list of (relative_path, abs_path, ext) for all files under input_folder"""
@@ -88,11 +89,23 @@ def upload_files(file_list, client):
                 # Convert STP to PNG image
                 with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_img:
                     png_path = tmp_img.name
-                
+
                 if convert_stp_to_image(abs_path, png_path):
                     obj = client.files.upload(file=png_path, config=dict(mime_type='image/png'))
                     uploaded[rel_path] = obj
                     print(f"STP converted & uploaded as PNG: {rel_path}")
+
+                    # --- SAVE PERMANENT PNG COPY ---
+                    # Save all generated PNGs into a "generated_pngs" directory inside the scanned folder
+                    save_dir = os.path.join(os.path.dirname(abs_path), "generated_pngs")
+                    os.makedirs(save_dir, exist_ok=True)
+                    # Use the same base name as the .stp, but .png
+                    base_name = os.path.splitext(os.path.basename(abs_path))[0] + ".png"
+                    save_path = os.path.join(save_dir, base_name)
+                    shutil.copy(png_path, save_path)
+                    print(f"Saved PNG to: {save_path}")
+                    # --- END ---
+
                     os.unlink(png_path)
                 else:
                     uploaded[rel_path] = None
@@ -105,6 +118,7 @@ def upload_files(file_list, client):
             print(f"Failed to process {rel_path}: {e}")
             uploaded[rel_path] = None
     return uploaded
+    
 
 def build_gemini_contents(uploaded_files: dict, repo_name: str, instructions: str):
     """
