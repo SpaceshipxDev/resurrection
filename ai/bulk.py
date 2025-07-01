@@ -5,6 +5,7 @@ from google import genai
 import cadquery as cq
 import pyvista as pv
 import shutil
+import time 
 
 def scan_files(input_folder):
     """Return a list of (relative_path, abs_path, ext) for all files under input_folder"""
@@ -34,15 +35,19 @@ def convert_stp_to_image(stp_path, output_image_path):
         cq.exporters.export(shape, stl_path)
         print(f"STL saved to: {stl_path}")
         # --- END SAVE STL ---
-        
-        # Set up PyVista plotter for off-screen rendering
-        plotter = pv.Plotter(off_screen=True)
-        mesh = pv.read(stl_path)
-        plotter.add_mesh(mesh, color='tan', show_edges=False)
-        plotter.camera_position = 'iso'  # Isometric view
-        plotter.screenshot(output_image_path, window_size=[1920, 1080])
-        plotter.close()
-        return True
+        time.sleep(2)
+
+        STL_FILE=stl_path 
+        OUTPUT_IMAGE=output_image_path 
+
+        plotter = pv.Plotter(off_screen=True) 
+        mesh = pv.read(STL_FILE) 
+        plotter.add_mesh(mesh, color="tan", show_edges=False) 
+        plotter.camera_position="iso" 
+        plotter.screenshot(OUTPUT_IMAGE, window_size=[1920, 1080])
+        plotter.close() 
+        return True 
+
     except Exception as e:
         print(f"Error converting STP to image: {e}")
         return False
