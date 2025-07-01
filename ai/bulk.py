@@ -34,19 +34,27 @@ def convert_stp_to_image(stp_path, output_image_path):
         stl_path = os.path.join(stl_dir, base_name + ".stl")
         cq.exporters.export(shape, stl_path)
         print(f"STL saved to: {stl_path}")
-        # --- END SAVE STL ---
-        time.sleep(10)
 
-        STL_FILE=stl_path 
-        OUTPUT_IMAGE="made.png"
+        # --- WAIT FOR FILE TO FULLY FLUSH ---
+        time.sleep(1)
+        # Optional: Wait for file size to stabilize
+        prev_size = -1
+        for _ in range(5):
+            size = os.path.getsize(stl_path)
+            if size == prev_size:
+                break
+            prev_size = size
+            time.sleep(0.5)
 
-        plotter = pv.Plotter(off_screen=True) 
-        mesh = pv.read(STL_FILE) 
-        plotter.add_mesh(mesh, color="tan", show_edges=False) 
-        plotter.camera_position="iso" 
-        plotter.screenshot(OUTPUT_IMAGE, window_size=[1920, 1080])
-        plotter.close() 
-        return True 
+        # --------- RELOAD STL FROM DISK -----------
+        STL_FILE = stl_path
+        plotter = pv.Plotter(off_screen=True)
+        mesh = pv.read(STL_FILE)
+        plotter.add_mesh(mesh, color="tan", show_edges=False)
+        plotter.camera_position = "iso"
+        plotter.screenshot(output_image_path, window_size=[1920, 1080])
+        plotter.close()
+        return True
 
     except Exception as e:
         print(f"Error converting STP to image: {e}")
